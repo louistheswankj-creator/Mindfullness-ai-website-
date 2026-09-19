@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dissent — A Stick Figure Saga</title>
+<style>
+  :root{
+    --bg:#0b0d14; --panel:#141826cc; --line:#2a3350; --accent:#7bd7ff;
+    --accent2:#ff5c7a; --dark:#8a4bff; --hp:#4caf50; --hplow:#e0402f;
+    --en:#3fb6ff; --text:#e8ecf7; --muted:#8c95b3;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;background:radial-gradient(ellipse at 50% -10%,#1a2036,#05060a 70%);
+    color:var(--text);font-family:'Segoe UI',system-ui,Arial,sans-serif;overflow:hidden;}
+  #wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:10px;}
+  #stage{position:relative;width:min(96vw,1000px);aspect-ratio:1000/650;}
+  canvas{width:100%;height:100%;display:block;background:#0d0f18;border:2px solid var(--line);border-radius:10px;
+    box-shadow:0 10px 40px #000a;}
+  .overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;background:#05060ac9;border-radius:10px;padding:20px;gap:14px;}
+  .hidden{display:none !important;}
+  h1{font-size:clamp(26px,5vw,44px);margin:0;letter-spacing:2px;
+    background:linear-gradient(90deg,var(--accent),var(--dark));-webkit-background-clip:text;background-clip:text;color:transparent;}
+  h2{margin:0;font-size:clamp(20px,4vw,30px);color:var(--accent);}
+  p{color:var(--muted);max-width:640px;line-height:1.5;margin:2px 0;}
+  .btn{background:linear-gradient(180deg,#20263f,#141826);border:1px solid var(--line);color:var(--text);
+    padding:10px 22px;border-radius:8px;font-size:16px;cursor:pointer;transition:.15s;}
+  .btn:hover{border-color:var(--accent);color:var(--accent);transform:translateY(-1px);}
+  .btn:active{transform:translateY(0);}
+  .btn.big{font-size:20px;padding:14px 34px;}
+  .keys{display:grid;grid-template-columns:repeat(2,auto);gap:4px 22px;text-align:left;color:var(--muted);font-size:14px;margin-top:6px;}
+  .keys b{color:var(--accent);}
+  #hud{position:absolute;left:0;right:0;top:0;padding:10px 14px;display:flex;justify-content:space-between;pointer-events:none;font-size:13px;}
+  .bar-block{pointer-events:none;min-width:220px;}
+  .bar-name{display:flex;justify-content:space-between;margin-bottom:2px;text-shadow:0 1px 2px #000;}
+  .bar{height:12px;border-radius:6px;background:#0006;border:1px solid #0008;overflow:hidden;}
+  .bar>i{display:block;height:100%;width:100%;transform-origin:left;transition:width .12s;}
+  .hpfill{background:linear-gradient(90deg,#4caf50,#8bd93f);}
+  .hpfill.low{background:linear-gradient(90deg,#e0402f,#ff7b4a);}
+  .enfill{background:linear-gradient(90deg,#3fb6ff,#7bd7ff);}
+  .enemybar{text-align:right;}
+  #floaters{position:absolute;inset:0;pointer-events:none;overflow:hidden;}
+  .float{position:absolute;font-weight:800;font-size:18px;text-shadow:0 2px 4px #000;animation:rise 1s ease-out forwards;}
+  @keyframes rise{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-46px)}}
+  #abilityBar{position:absolute;left:0;right:0;bottom:8px;display:flex;justify-content:center;gap:6px;flex-wrap:wrap;padding:0 8px;}
+  .ability{position:relative;width:64px;height:64px;border-radius:10px;border:1px solid var(--line);
+    background:linear-gradient(180deg,#1c2338,#10131f);color:var(--text);cursor:pointer;display:flex;
+    flex-direction:column;align-items:center;justify-content:center;font-size:10px;gap:3px;user-select:none;}
+  .ability .k{font-size:9px;color:var(--muted);position:absolute;top:3px;left:5px;}
+  .ability .ic{font-size:20px;}
+  .ability .cd{position:absolute;inset:0;background:#000a;border-radius:10px;display:flex;align-items:center;
+    justify-content:center;font-size:16px;color:#fff;}
+  .ability.locked{opacity:.35;filter:grayscale(1);cursor:default;}
+  .ability:hover:not(.locked){border-color:var(--accent);}
+  #toast{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#0d0f18ee;
+    border:1px solid var(--accent);padding:16px 26px;border-radius:10px;font-size:18px;text-align:center;
+    pointer-events:none;opacity:0;transition:opacity .3s;}
+  #toast.show{opacity:1;}
+  #mapHint{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);background:#0d0f18cc;
+    border:1px solid var(--line);padding:6px 14px;border-radius:8px;font-size:13px;color:var(--muted);}
+  footer{color:#4b5372;font-size:11px;margin-top:8px;}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="stage">
+    <canvas id="c" width="1000" height="650"></canvas>
+
+    <div id="hud" class="hidden"></div>
+    <div id="floaters"></div>
+    <div id="abilityBar" class="hidden"></div>
+    <div id="toast"></div>
+    <div id="mapHint" class="hidden">WASD / Arrows to walk. Step on a location, then press <b>E</b> to enter.</div>
+
+    <div id="menuScreen" class="overlay">
+      <h1>DISSENT</h1>
+      <p>A stick figure awakens with fractured combat instincts. Wander the map, find rivals, and master eight
+      forms of violence: <b>Hit</b>, <b>Kick</b>, <b>Incise</b>, <b>Penetrate</b>, <b>Corner</b>, <b>Cornerstone</b>,
+      <b>Manic Dissent</b>, and <b>Dark Dissent</b>.</p>
+      <div class="keys">
+        <div><b>WASD / Arrows</b> — move</div><div><b>E</b> — enter location</div>
+        <div><b>1-8</b> — use ability</div><div><b>Space</b> — block / brace</div>
+      </div>
+      <button class="btn big" id="startBtn">Begin</button>
+      <button class="btn" id="resetBtn">Reset Progress</button>
+    </div>
+
+    <div id="resultScreen" class="overlay hidden">
+      <h2 id="resultTitle">Victory</h2>
+      <p id="resultText"></p>
+      <button class="btn big" id="continueBtn">Continue</button>
+    </div>
+
+    <div id="lockedScreen" class="overlay hidden">
+      <h2>Path Sealed</h2>
+      <p id="lockedText">This place has not opened to you yet.</p>
+      <button class="btn" id="lockedOkBtn">Back</button>
+    </div>
+
+    <div id="finaleScreen" class="overlay hidden">
+      <h1>SILENCE</h1>
+      <p>Every rival has fallen. The stick figure's dissent has finally gone quiet, and the map is yours.</p>
+      <button class="btn big" id="finaleBtn">New Game+</button>
+    </div>
+  </div>
+  <footer>Move with WASD/Arrows · Fight with 1-8 · Progress autosaves in your browser</footer>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------- persistence ---------- */
+const SAVE_KEY = "dissent_stick_saga_v1";
+function loadSave(){
+  try{ return JSON.parse(localStorage.getItem(SAVE_KEY)) || null; }catch(e){ return null; }
+}
+function writeSave(){
+  const defeated = LOCATIONS.map(l=>l.defeated);
+  localStorage.setItem(SAVE_KEY, JSON.stringify({defeated}));
+}
+function applySave(save){
+  if(!save) return;
+  LOCATIONS.forEach((l,i)=>{ l.defeated = !!save.defeated[i]; });
+  refreshUnlocks();
+}
+
+/* ---------- canvas / dom ---------- */
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+const W = canvas.width, H = canvas.height;
+const hud = document.getElementById("hud");
+const abilityBar = document.getElementById("abilityBar");
+const floaters = document.getElementById("floaters");
+const toastEl = document.getElementById("toast");
+const mapHint = document.getElementById("mapHint");
+
+const menuScreen = document.getElementById("menuScreen");
+const resultScreen = document.getElementById("resultScreen");
+const lockedScreen = document.getElementById("lockedScreen");
+const finaleScreen = document.getElementById("finaleScreen");
+
+/* ---------- audio (tiny synth, no files) ---------- */
+let actx=null;
+function beep(freq,dur,type,gain){
+  try{
+    if(!actx) actx = new (window.AudioContext||window.webkitAudioContext)();
+    const o=actx.createOscillator(), g=actx.createGain();
+    o.type=type||"square"; o.frequency.value=freq;
+    g.gain.value=gain==null?0.06:gain;
+    o.connect(g); g.connect(actx.destination);
+    o.start();
+    g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime+dur);
+    o.stop(actx.currentTime+dur);
+  }catch(e){}
+}
+const sfx = {
+  hit:()=>beep(180,0.09,"square",0.07),
+  kick:()=>beep(120,0.12,"sawtooth",0.08),
+  slash:()=>beep(500,0.08,"triangle",0.05),
+  thrust:()=>beep(260,0.15,"sawtooth",0.08),
+  pin:()=>beep(90,0.2,"square",0.06),
+  shield:()=>beep(660,0.15,"sine",0.05),
+  flurry:()=>beep(320,0.05,"square",0.045),
+  dark:()=>beep(60,0.4,"sawtooth",0.1),
+  hurt:()=>beep(150,0.1,"noise",0.05),
+  win:()=>{beep(440,0.15,"triangle",0.07);setTimeout(()=>beep(660,0.2,"triangle",0.07),140);},
+  lose:()=>{beep(220,0.3,"sawtooth",0.08);setTimeout(()=>beep(120,0.4,"sawtooth",0.08),160);},
+};
+
+/* ---------- input ---------- */
+const keys = new Set();
+window.addEventListener("keydown", e=>{
+  keys.add(e.key.toLowerCase());
+  if(["arrowup","arrowdown","arrowleft","arrowright"," "].includes(e.key.toLowerCase())) e.preventDefault();
+  handleKeyAction(e.key.toLowerCase());
+});
+window.addEventListener("keyup", e=> keys.delete(e.key.toLowerCase()));
+
+function handleKeyAction(k){
+  if(state.mode==="map" && k==="e") tryEnterLocation();
+  if(state.mode==="battle"){
+    const idx = "12345678".indexOf(k);
+    if(idx>=0) useAbility(ABILITIES[idx]);
+  }
+}
+
+/* ================= MAP ================= */
+const LOCATIONS = [
+  {id:0,name:"Training Yard", x:130,y:470, enemy:"dummy", defeated:false, unlocked:true},
+  {id:1,name:"Stonebridge",   x:330,y:360, enemy:"brawler", defeated:false, unlocked:false},
+  {id:2,name:"Corner Alley",  x:560,y:470, enemy:"thug", defeated:false, unlocked:false},
+  {id:3,name:"Bleeding Hollow",x:420,y:210, enemy:"stalker", defeated:false, unlocked:false},
+  {id:4,name:"Manic Fields",  x:700,y:190, enemy:"wretch", defeated:false, unlocked:false},
+  {id:5,name:"Dark Sanctum",  x:880,y:100, enemy:"wraith", defeated:false, unlocked:false},
+];
+const PATH = [[0,1],[1,2],[2,3],[3,4],[4,5]];
+
+function refreshUnlocks(){
+  LOCATIONS[0].unlocked = true;
+  PATH.forEach(([a,b])=>{ if(LOCATIONS[a].defeated) LOCATIONS[b].unlocked = true; });
+}
+
+const mapPlayer = {x:130,y:540,dir:1,walking:false,t:0};
+let activeLocation = null;
+
+function tryEnterLocation(){
+  const loc = nearestLocation();
+  if(!loc) return;
+  if(!loc.unlocked){
+    showLocked(loc);
+    return;
+  }
+  activeLocation = loc;
+  startBattle(loc);
+}
+function nearestLocation(){
+  for(const l of LOCATIONS){
+    const d = Math.hypot(mapPlayer.x-l.x, mapPlayer.y-l.y);
+    if(d < 46) return l;
+  }
+  return null;
+}
+
+function updateMap(dt){
+  let dx=0, dy=0;
+  if(keys.has("a")||keys.has("arrowleft")) dx-=1;
+  if(keys.has("d")||keys.has("arrowright")) dx+=1;
+  if(keys.has("w")||keys.has("arrowup")) dy-=1;
+  if(keys.has("s")||keys.has("arrowdown")) dy+=1;
+  const moving = dx||dy;
+  mapPlayer.walking = !!moving;
+  if(moving){
+    const len = Math.hypot(dx,dy)||1;
+    mapPlayer.x += (dx/len)*160*dt;
+    mapPlayer.y += (dy/len)*160*dt;
+    mapPlayer.dir = dx>=0?1:-1;
+    mapPlayer.x = Math.max(24,Math.min(W-24,mapPlayer.x));
+    mapPlayer.y = Math.max(24,Math.min(H-24,mapPlayer.y));
+  }
+  mapPlayer.t += dt;
+}
+
+function drawMap(){
+  ctx.clearRect(0,0,W,H);
+  const g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,"#141a2c"); g.addColorStop(1,"#05060a");
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+
+  ctx.strokeStyle="#232a44"; ctx.lineWidth=1;
+  for(let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+
+  ctx.lineWidth=4;
+  PATH.forEach(([a,b])=>{
+    const A=LOCATIONS[a], B=LOCATIONS[b];
+    ctx.strokeStyle = B.unlocked ? "#4a5a8a" : "#232a44";
+    ctx.setLineDash(B.unlocked?[]:[6,8]);
+    ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke();
+  });
+  ctx.setLineDash([]);
+
+  LOCATIONS.forEach(l=>{
+    ctx.save();
+    ctx.translate(l.x,l.y);
+    const near = Math.hypot(mapPlayer.x-l.x,mapPlayer.y-l.y) < 46;
+    ctx.beginPath(); ctx.arc(0,0,near?24:20,0,Math.PI*2);
+    ctx.fillStyle = l.defeated ? "#243318" : (l.unlocked? "#1c2338":"#161a28");
+    ctx.fill();
+    ctx.lineWidth=2;
+    ctx.strokeStyle = l.defeated? "#6fbf3a" : (l.unlocked? "#7bd7ff":"#3a4166");
+    ctx.stroke();
+    if(!l.unlocked){
+      ctx.fillStyle="#5b6690"; ctx.font="16px sans-serif"; ctx.textAlign="center";
+      ctx.fillText("🔒",0,6);
+    } else if(l.defeated){
+      ctx.fillStyle="#8bd93f"; ctx.font="16px sans-serif"; ctx.textAlign="center";
+      ctx.fillText("✓",0,6);
+    }
+    ctx.restore();
+    ctx.fillStyle = l.unlocked? "#e8ecf7":"#4b5372";
+    ctx.font="13px sans-serif"; ctx.textAlign="center";
+    ctx.fillText(l.name, l.x, l.y-32);
+  });
+
+  drawStick(ctx, mapPlayer.x, mapPlayer.y, mapPlayer.dir, {
+    walking: mapPlayer.walking, t: mapPlayer.t, color:"#7bd7ff", pose:"idle"
+  });
+
+  mapHint.classList.remove("hidden");
+}
+
+function showLocked(loc){
+  document.getElementById("lockedText").textContent =
+    `${loc.name} is sealed. Clear the previous rival to open this path.`;
+  lockedScreen.classList.remove("hidden");
+}
+
+/* ================= STICK FIGURE RENDERER ================= */
+// Generic procedural stick figure. pose drives limb angles; t is time for idle sway.
+function drawStick(c,x,y,dir,opts){
+  opts = opts||{};
+  const t = opts.t||0;
+  const color = opts.color||"#e8ecf7";
+  const scale = opts.scale||1;
+  const pose = opts.pose||"idle";
+  const walk = opts.walking && pose==="idle";
+
+  c.save();
+  c.translate(x,y);
+  c.scale(dir*scale, scale);
+  c.lineCap="round"; c.lineJoin="round";
+  c.strokeStyle = color; c.lineWidth = 4.5;
+
+  const headR = 9;
+  let bodyLen = 26, hipY = bodyLen;
+  let armA1=0, armA2=0, legA1=0, legA2=0, leanX=0, leanY=0;
+
+  const sway = Math.sin(t*6)*0.15;
+  if(walk){
+    legA1 = Math.sin(t*10)*0.6; legA2 = -Math.sin(t*10)*0.6;
+    armA1 = -Math.sin(t*10)*0.4; armA2 = Math.sin(t*10)*0.4;
+  } else {
+    legA1 = 0.08; legA2 = -0.08; armA1 = sway*0.5; armA2 = -sway*0.5;
+  }
+
+  switch(pose){
+    case "windup": leanX=-4; armA1=-1.4; armA2=-0.3; break;
+    case "hit": leanX=6; armA1=1.3; armA2=-0.2; break;
+    case "kick_wind": leanX=-4; legA1=-0.9; break;
+    case "kick": leanX=8; legA1=1.4; armA1=-0.6; break;
+    case "slash_wind": armA2=-1.6; leanX=-3; break;
+    case "slash": armA2=1.5; leanX=6; break;
+    case "thrust_wind": armA1=-1.7; leanX=-8; break;
+    case "thrust": armA1=1.9; leanX=10; break;
+    case "grab": armA1=0.9; armA2=0.9; leanX=4; break;
+    case "brace": armA1=-1.1; armA2=1.1; leanX=-3; legA1=0.3; legA2=-0.3; break;
+    case "flurry": armA1=Math.sin(t*40); armA2=-Math.sin(t*40); leanX=2; break;
+    case "dark_wind": armA1=-1.4; armA2=-1.4; leanY=-4; break;
+    case "dark": armA1=1.6; armA2=1.6; leanX=8; break;
+    case "hurt": leanX=-6; leanY=2; armA1=-0.3; armA2=0.3; break;
+    case "stun": leanX=Math.sin(t*20)*3; leanY=4; armA1=0.6; armA2=-0.6; break;
+    case "block": armA1=-0.6; armA2=0.6; leanX=-6; break;
+    case "ko": break;
+  }
+
+  c.translate(leanX, leanY);
+
+  if(pose==="ko"){
+    // fallen figure
+    c.save(); c.rotate(Math.PI/2);
+    c.beginPath(); c.arc(-bodyLen,0,headR,0,Math.PI*2); c.stroke();
+    c.beginPath(); c.moveTo(0,0); c.lineTo(-bodyLen+headR,0); c.stroke();
+    c.beginPath(); c.moveTo(0,0); c.lineTo(14,-10); c.moveTo(0,0); c.lineTo(14,10); c.stroke();
+    c.beginPath(); c.moveTo(-bodyLen+headR,0); c.lineTo(-bodyLen+headR-16,-8);
+    c.moveTo(-bodyLen+headR,0); c.lineTo(-bodyLen+headR-16,8); c.stroke();
+    c.restore();
+    c.restore();
+    return;
+  }
+
+  // head
+  c.beginPath(); c.arc(0,-hipY-headR*2,headR,0,Math.PI*2); c.stroke();
+  // spine
+  c.beginPath(); c.moveTo(0,-hipY); c.lineTo(0,-hipY*0.15); c.stroke();
+  const shoulderY = -hipY*0.75;
+  // arms
+  c.beginPath();
+  c.moveTo(0,shoulderY);
+  c.lineTo(Math.cos(armA1+1.3)*20, shoulderY+Math.sin(armA1+1.3)*20);
+  c.moveTo(0,shoulderY);
+  c.lineTo(Math.cos(armA2+1.9)*20, shoulderY+Math.sin(armA2+1.9)*20);
+  c.stroke();
+  // legs
+  c.beginPath();
+  c.moveTo(0,-hipY*0.15);
+  c.lineTo(Math.sin(legA1)*16, -hipY*0.15+22+Math.cos(legA1)*4);
+  c.moveTo(0,-hipY*0.15);
+  c.lineTo(Math.sin(legA2)*16, -hipY*0.15+22+Math.cos(legA2)*4);
+  c.stroke();
+
+  if(pose==="slash" || pose==="slash_wind"){
+    c.save(); c.strokeStyle=opts.accent||"#ff5c7a"; c.lineWidth=3;
+    c.beginPath();
+    const a = pose==="slash"?0.2:-1.2;
+    c.arc(Math.cos(armA2+1.9)*20, shoulderY+Math.sin(armA2+1.9)*20, 16, a, a+1.6);
+    c.stroke(); c.restore();
+  }
+  if(pose==="dark"){
+    c.save(); c.strokeStyle="#8a4bff"; c.globalAlpha=0.7;
+    for(let i=0;i<4;i++){
+      c.beginPath(); c.arc(0,-hipY*0.5,26+i*8,0,Math.PI*2); c.stroke();
+    }
+    c.restore();
+  }
+
+  c.restore();
+}
+
+/* ================= ABILITIES ================= */
+const ABILITIES = [
+  {key:"1",name:"Hit",icon:"👊",cost:5,cd:0.6,range:70,windup:0.10,active:0.10,
+   dmg:8,pierce:false,
+   sfx:"hit", windupPose:"windup", hitPose:"hit",
+   apply(user,target,scale){ dealDamage(user,target,this.dmg*(scale||1),this.pierce);
+     pushBack(target, user, 6);
+   }},
+  {key:"2",name:"Kick",icon:"🦵",cost:10,cd:1.2,range:78,windup:0.16,active:0.12,
+   dmg:12,pierce:false,
+   sfx:"kick", windupPose:"kick_wind", hitPose:"kick",
+   apply(user,target,scale){ dealDamage(user,target,this.dmg*(scale||1),this.pierce);
+     pushBack(target, user, 46);
+     addStatus(target,"stagger",0.5);
+   }},
+  {key:"3",name:"Incise",icon:"🔪",cost:15,cd:3.0,range:74,windup:0.14,active:0.12,
+   dmg:6,pierce:false,
+   sfx:"slash", windupPose:"slash_wind", hitPose:"slash",
+   apply(user,target,scale){ dealDamage(user,target,this.dmg*(scale||1),this.pierce);
+     addStatus(target,"bleed",4.0,{dps:4*(scale||1)});
+   }},
+  {key:"4",name:"Penetrate",icon:"🗡️",cost:20,cd:4.0,range:84,windup:0.20,active:0.14,
+   dmg:20,pierce:true,
+   sfx:"thrust", windupPose:"thrust_wind", hitPose:"thrust",
+   apply(user,target,scale){ dealDamage(user,target,this.dmg*(scale||1),this.pierce); }},
+  {key:"5",name:"Corner",icon:"🧱",cost:15,cd:5.0,range:74,windup:0.14,active:0.12,
+   dmg:5,pierce:false,
+   sfx:"pin", windupPose:"grab", hitPose:"grab",
+   apply(user,target,scale){
+     dealDamage(user,target,this.dmg*(scale||1),this.pierce);
+     const wallDist = Math.min(target.x-ARENA.left, ARENA.right-target.x);
+     if(wallDist < 90){
+       addStatus(target,"cornered",3.0,{dmgMult:1.5});
+       addStatus(target,"stun",1.2);
+     } else {
+       const dir = target.x < user.x ? -1 : 1;
+       target.vx += dir*220;
+     }
+   }},
+  {key:"6",name:"Cornerstone",icon:"🛡️",cost:20,cd:8.0,range:0,windup:0.10,active:0.0,
+   dmg:0,pierce:false, self:true,
+   sfx:"shield", windupPose:"brace", hitPose:"brace",
+   apply(user){
+     addStatus(user,"shield",3.0,{amount:26});
+     addStatus(user,"reflect",3.0,{pct:0.3});
+   }},
+  {key:"7",name:"Manic Dissent",icon:"💢",cost:30,cd:6.0,range:72,windup:0.12,active:1.0,
+   dmg:4,pierce:false,hits:5,
+   sfx:"flurry", windupPose:"windup", hitPose:"flurry",
+   apply(user,target,scale){
+     const dmg = this.dmg*(scale||1);
+     for(let i=0;i<this.hits;i++){
+       setTimeout(()=>{ if(target.hp>0 && user.hp>0) dealDamage(user,target,dmg,this.pierce,true); }, i*140);
+     }
+   }},
+  {key:"8",name:"Dark Dissent",icon:"🌑",cost:48,cd:15.0,range:100,windup:0.30,active:0.2,
+   dmg:42,pierce:true,
+   sfx:"dark", windupPose:"dark_wind", hitPose:"dark",
+   apply(user,target,scale){
+     dealDamage(user,target,this.dmg*(scale||1),this.pierce);
+     screenFlash("#8a4bff33");
+   }},
+];
+
+/* ================= BATTLE ================= */
+const ARENA = {left:60,right:940,ground:520};
+const ENEMY_TYPES = {
+  dummy:   {name:"Training Dummy", hp:40, dmg:4, def:0, aggro:0.5, pool:["hit"], color:"#c9cfe6"},
+  brawler: {name:"Bridge Brawler", hp:65, dmg:7, def:2, aggro:0.8, pool:["hit","kick"], color:"#e0a24c"},
+  thug:    {name:"Alley Thug",     hp:80, dmg:8, def:3, aggro:0.9, pool:["hit","kick","corner"], color:"#e05c5c"},
+  stalker: {name:"Hollow Stalker", hp:95, dmg:9, def:4, aggro:1.0, pool:["incise","penetrate","hit"], color:"#5ce0a0"},
+  wretch:  {name:"Frenzied Wretch",hp:110,dmg:9, def:3, aggro:1.3, pool:["hit","kick","manic"], color:"#e05ce0"},
+  wraith:  {name:"Dissent Wraith", hp:160,dmg:12,def:6, aggro:1.1, pool:["penetrate","corner","dark","incise"], color:"#8a4bff"},
+};
+
+let state = { mode:"menu" };
+let player, enemy, lastTime=0;
+
+function newFighter(isPlayer, kind){
+  return {
+    isPlayer, kind,
+    x: isPlayer? 220: 780,
+    vx:0,
+    dir: isPlayer? 1:-1,
+    hp: isPlayer? 100: ENEMY_TYPES[kind].hp,
+    maxHp: isPlayer? 100: ENEMY_TYPES[kind].hp,
+    energy: isPlayer? 100:999,
+    maxEnergy: 100,
+    def: isPlayer? 0: ENEMY_TYPES[kind].def,
+    statuses: {},
+    cooldowns: {},
+    pose:"idle", poseTimer:0, animT:0,
+    actionLock:0,
+    aiTimer: 1.0,
+  };
+}
+
+function startBattle(loc){
+  player = newFighter(true,null);
+  enemy = newFighter(false, loc.enemy);
+  enemy.dir=-1;
+  state = {mode:"battle", loc};
+  hud.classList.remove("hidden");
+  abilityBar.classList.remove("hidden");
+  mapHint.classList.add("hidden");
+  buildAbilityBar();
+  showToast(`${ENEMY_TYPES[loc.enemy].name} blocks your path!`);
+}
+
+function buildAbilityBar(){
+  abilityBar.innerHTML="";
+  ABILITIES.forEach(a=>{
+    const div=document.createElement("div");
+    div.className="ability";
+    div.innerHTML=`<span class="k">${a.key}</span><span class="ic">${a.icon}</span><span>${a.name}</span><div class="cd hidden"></div>`;
+    div.addEventListener("click",()=>useAbility(a));
+    div.dataset.name=a.name;
+    abilityBar.appendChild(div);
+  });
+}
+
+function addStatus(f,name,dur,data){
+  f.statuses[name] = Object.assign({t:dur}, data||{});
+}
+function hasStatus(f,name){ return !!f.statuses[name]; }
+
+function dealDamage(user,target,base,pierce,noKnock){
+  if(target.hp<=0) return;
+  let dmg = base;
+  if(!pierce) dmg = Math.max(1, dmg - target.def);
+  if(hasStatus(target,"block")) dmg *= pierce ? 0.7 : 0.35;
+  if(hasStatus(target,"cornered")) dmg *= target.statuses.cornered.dmgMult;
+  if(hasStatus(target,"shield")){
+    const s = target.statuses.shield;
+    const absorbed = Math.min(s.amount, dmg);
+    s.amount -= absorbed; dmg -= absorbed;
+    if(s.amount<=0) delete target.statuses.shield;
+  }
+  dmg = Math.round(dmg);
+  target.hp = Math.max(0, target.hp - dmg);
+  spawnFloat(target, dmg>0?("-"+dmg):"blocked", dmg>0?(user.isPlayer?"#ffd166":"#ff5c7a"):"#7bd7ff");
+  if(hasStatus(target,"reflect") && user.hp>0){
+    const back = Math.round(dmg*target.statuses.reflect.pct);
+    if(back>0){ user.hp=Math.max(0,user.hp-back); spawnFloat(user,"-"+back,"#8a4bff"); }
+  }
+  if(dmg>0 && target.pose!=="hurt" && target.pose!=="ko"){
+    target.pose="hurt"; target.poseTimer=0.25;
+  }
+  sfx.hurt && dmg>0 && beep(140,0.06,"square",0.04);
+}
+
+function pushBack(target, from, amount){
+  const dir = target.x < from.x ? -1 : 1;
+  target.vx += dir*amount*6;
+}
+
+function useAbility(a){
+  if(state.mode!=="battle") return;
+  if(player.hp<=0 || player.actionLock>0) return;
+  if(player.cooldowns[a.name] > 0) return;
+  if(player.energy < a.cost) { showToast("Not enough energy!", 500); return; }
+  const dist = Math.abs(player.x-enemy.x);
+  if(!a.self && dist > a.range){ return; }
+
+  player.energy -= a.cost;
+  player.cooldowns[a.name] = a.cd;
+  player.actionLock = a.windup + a.active;
+  player.dir = enemy.x < player.x ? -1:1;
+  player.pose = a.windupPose; player.poseTimer = a.windup;
+
+  setTimeout(()=>{
+    if(player.hp<=0) return;
+    player.pose = a.hitPose; player.poseTimer = Math.max(0.12,a.active);
+    if(typeof beep!=="undefined" && sfx[a.sfx]) sfx[a.sfx]();
+    if(a.self){ a.apply(player); }
+    else {
+      const d = Math.abs(player.x-enemy.x);
+      if(d <= a.range+20 && enemy.hp>0) a.apply(player, enemy);
+    }
+    checkFaint();
+  }, a.windup*1000);
+}
+
+function enemyUseAbility(name){
+  const table = {
+    hit:ABILITIES[0], kick:ABILITIES[1], incise:ABILITIES[2], penetrate:ABILITIES[3],
+    corner:ABILITIES[4], cornerstone:ABILITIES[5], manic:ABILITIES[6], dark:ABILITIES[7]
+  };
+  const a = table[name]; if(!a) return;
+  if(enemy.actionLock>0) return;
+  const dist=Math.abs(player.x-enemy.x);
+  if(dist> a.range+10) return;
+  enemy.cooldowns[a.name]=a.cd*0.8;
+  enemy.actionLock = a.windup+a.active;
+  enemy.dir = player.x<enemy.x?-1:1;
+  enemy.pose=a.windupPose; enemy.poseTimer=a.windup;
+  setTimeout(()=>{
+    if(enemy.hp<=0) return;
+    enemy.pose=a.hitPose; enemy.poseTimer=Math.max(0.12,a.active);
+    if(sfx[a.sfx]) sfx[a.sfx]();
+    const d=Math.abs(player.x-enemy.x);
+    if(d<=a.range+24 && player.hp>0){
+      const scale = ENEMY_TYPES[enemy.kind].dmg/8;
+      a.apply(enemy, player, scale);
+    }
+    checkFaint();
+  }, a.windup*1000);
+}
+
+function updateStatuses(f,dt){
+  for(const key in f.statuses){
+    const s=f.statuses[key];
+    if(key==="bleed"){ f.hp=Math.max(0,f.hp-s.dps*dt); }
+    s.t-=dt;
+    if(s.t<=0) delete f.statuses[key];
+  }
+}
+
+function updateFighter(f,dt){
+  f.animT+=dt;
+  f.vx *= Math.pow(0.001,dt);
+  f.x += f.vx*dt;
+  f.x = Math.max(ARENA.left+20, Math.min(ARENA.right-20, f.x));
+  if(f.actionLock>0) f.actionLock=Math.max(0,f.actionLock-dt);
+  if(f.poseTimer>0){ f.poseTimer-=dt; if(f.poseTimer<=0 && f.hp>0) f.pose = hasStatus(f,"stun")?"stun":"idle"; }
+  if(f.hp<=0) f.pose="ko";
+  if(f.cooldowns) for(const k in f.cooldowns){ f.cooldowns[k]=Math.max(0,f.cooldowns[k]-dt); }
+  f.energy = Math.min(f.maxEnergy, f.energy + (f.isPlayer?10:0)*dt);
+  updateStatuses(f,dt);
+}
+
+function updatePlayerMove(dt){
+  if(hasStatus(player,"stun") || player.actionLock>0 || player.hp<=0) return;
+  let dx=0;
+  if(keys.has("a")||keys.has("arrowleft")) dx-=1;
+  if(keys.has("d")||keys.has("arrowright")) dx+=1;
+  if(dx){ player.x += dx*180*dt; player.dir = dx; }
+  if(keys.has(" ")){
+    player.pose="block"; addStatus(player,"block",0.15,{});
+  } else if(player.pose==="block"){
+    player.pose="idle";
+  }
+}
+
+function enemyAI(dt){
+  if(enemy.hp<=0||player.hp<=0) return;
+  enemy.aiTimer -= dt;
+  const dist = Math.abs(player.x-enemy.x);
+  const type = ENEMY_TYPES[enemy.kind];
+  if(hasStatus(enemy,"stun") || enemy.actionLock>0){ return; }
+  if(dist > 80){
+    const dir = player.x<enemy.x?-1:1;
+    enemy.x += dir*100*type.aggro*dt;
+    enemy.dir = dir;
+  } else if(enemy.aiTimer<=0){
+    const pool = type.pool;
+    const choice = pool[Math.floor(Math.random()*pool.length)];
+    enemyUseAbility(choice);
+    enemy.aiTimer = 0.8 + Math.random()*1.0;
+  }
+}
+
+function checkFaint(){
+  if(enemy.hp<=0 && state.mode==="battle"){ onBattleEnd(true); }
+  else if(player.hp<=0 && state.mode==="battle"){ onBattleEnd(false); }
+}
+
+function onBattleEnd(playerWon){
+  state.mode="post";
+  hud.classList.add("hidden");
+  abilityBar.classList.add("hidden");
+  if(playerWon){
+    sfx.win();
+    activeLocation.defeated = true;
+    refreshUnlocks();
+    writeSave();
+    document.getElementById("resultTitle").textContent="Victory";
+    document.getElementById("resultText").textContent =
+      `${ENEMY_TYPES[activeLocation.enemy].name} falls. The path onward opens.`;
+  } else {
+    sfx.lose();
+    document.getElementById("resultTitle").textContent="Defeated";
+    document.getElementById("resultText").textContent =
+      `${ENEMY_TYPES[activeLocation.enemy].name} overwhelms you this time. Return and try again.`;
+  }
+  resultScreen.classList.remove("hidden");
+}
+
+/* ---------- battle render ---------- */
+function drawBattle(){
+  ctx.clearRect(0,0,W,H);
+  const bg = ctx.createLinearGradient(0,0,0,H);
+  const theme = themeFor(activeLocation.enemy);
+  bg.addColorStop(0,theme[0]); bg.addColorStop(1,theme[1]);
+  ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+
+  ctx.fillStyle="#00000055";
+  ctx.fillRect(0,ARENA.ground+40,W,H-ARENA.ground-40);
+  ctx.strokeStyle="#ffffff22"; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(0,ARENA.ground+40); ctx.lineTo(W,ARENA.ground+40); ctx.stroke();
+
+  // wall markers
+  [ARENA.left,ARENA.right].forEach(wx=>{
+    ctx.fillStyle="#ffffff14";
+    ctx.fillRect(wx-6,ARENA.ground-140,12,180);
+  });
+
+  drawStick(ctx, player.x, ARENA.ground, player.dir, {t:player.animT, color:"#7bd7ff", pose:player.pose, walking:false, accent:"#ffd166"});
+  drawStick(ctx, enemy.x, ARENA.ground, enemy.dir, {t:enemy.animT, color:theme[2], pose:enemy.pose, walking:false, accent:"#ff5c7a"});
+
+  if(hasStatus(player,"shield")){
+    ctx.save(); ctx.strokeStyle="#3fb6ffaa"; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(player.x, ARENA.ground-40, 42,0,Math.PI*2); ctx.stroke(); ctx.restore();
+  }
+  if(hasStatus(enemy,"cornered")){
+    ctx.fillStyle="#ff5c7a"; ctx.font="12px sans-serif"; ctx.textAlign="center";
+    ctx.fillText("CORNERED", enemy.x, ARENA.ground-90);
+  }
+  renderHud();
+}
+
+function themeFor(kind){
+  switch(kind){
+    case "dummy": return ["#1c2338","#0a0c14","#c9cfe6"];
+    case "brawler": return ["#2a2010","#0d0a05","#e0a24c"];
+    case "thug": return ["#2a1414","#0d0505","#e05c5c"];
+    case "stalker": return ["#0f2a1c","#050d09","#5ce0a0"];
+    case "wretch": return ["#2a1030","#0d050f","#e05ce0"];
+    case "wraith": return ["#150a2a","#05030d","#8a4bff"];
+    default: return ["#1c2338","#0a0c14","#e8ecf7"];
+  }
+}
+
+function renderHud(){
+  const lowP = player.hp/player.maxHp < 0.3;
+  hud.innerHTML = `
+    <div class="bar-block">
+      <div class="bar-name"><span>You</span><span>${Math.ceil(player.hp)}/${player.maxHp}</span></div>
+      <div class="bar"><i class="hpfill ${lowP?'low':''}" style="width:${100*player.hp/player.maxHp}%"></i></div>
+      <div class="bar" style="margin-top:3px;"><i class="enfill" style="width:${100*player.energy/player.maxEnergy}%"></i></div>
+    </div>
+    <div class="bar-block enemybar">
+      <div class="bar-name"><span>${Math.ceil(enemy.hp)}/${enemy.maxHp}</span><span>${ENEMY_TYPES[activeLocation.enemy].name}</span></div>
+      <div class="bar"><i class="hpfill ${enemy.hp/enemy.maxHp<0.3?'low':''}" style="width:${100*enemy.hp/enemy.maxHp}%"></i></div>
+    </div>
+  `;
+  [...abilityBar.children].forEach((el,i)=>{
+    const a=ABILITIES[i];
+    const cdEl=el.querySelector(".cd");
+    const cd=player.cooldowns[a.name]||0;
+    const dist=Math.abs(player.x-enemy.x);
+    const outOfRange = !a.self && dist>a.range;
+    const noEnergy = player.energy<a.cost;
+    if(cd>0){ cdEl.classList.remove("hidden"); cdEl.textContent=cd.toFixed(1); }
+    else cdEl.classList.add("hidden");
+    el.classList.toggle("locked", cd>0||noEnergy);
+    el.style.outline = outOfRange? "1px dashed #ff5c7a55":"none";
+  });
+}
+
+function spawnFloat(f,text,color){
+  const el=document.createElement("div");
+  el.className="float"; el.textContent=text; el.style.color=color||"#fff";
+  const px = (f.x/W)*100, py=((ARENA.ground-70)/H)*100;
+  el.style.left = px+"%"; el.style.top = py+"%";
+  floaters.appendChild(el);
+  setTimeout(()=>el.remove(),1000);
+}
+function screenFlash(color){
+  const el=document.createElement("div");
+  el.style.position="absolute"; el.style.inset="0"; el.style.background=color;
+  el.style.pointerEvents="none"; el.style.transition="opacity .4s";
+  floaters.appendChild(el);
+  requestAnimationFrame(()=>{ el.style.opacity="0"; });
+  setTimeout(()=>el.remove(),450);
+}
+let toastTimer=null;
+function showToast(msg,dur){
+  toastEl.textContent=msg; toastEl.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>toastEl.classList.remove("show"), dur||1800);
+}
+
+/* ================= MAIN LOOP ================= */
+function loop(ts){
+  const dt = Math.min(0.05,(ts-lastTime)/1000||0);
+  lastTime=ts;
+  if(state.mode==="map"){ updateMap(dt); drawMap(); }
+  else if(state.mode==="battle"){
+    updatePlayerMove(dt);
+    enemyAI(dt);
+    updateFighter(player,dt);
+    updateFighter(enemy,dt);
+    drawBattle();
+  }
+  requestAnimationFrame(loop);
+}
+
+/* ================= SCREENS / FLOW ================= */
+function goToMap(){
+  state={mode:"map"};
+  resultScreen.classList.add("hidden");
+  lockedScreen.classList.add("hidden");
+  menuScreen.classList.add("hidden");
+  finaleScreen.classList.add("hidden");
+  mapHint.classList.remove("hidden");
+  if(LOCATIONS.every(l=>l.defeated)){
+    finaleScreen.classList.remove("hidden");
+  }
+}
+
+document.getElementById("startBtn").addEventListener("click", ()=>{
+  applySave(loadSave());
+  goToMap();
+});
+document.getElementById("resetBtn").addEventListener("click", ()=>{
+  localStorage.removeItem(SAVE_KEY);
+  LOCATIONS.forEach(l=>{l.defeated=false;});
+  refreshUnlocks();
+  showToast("Progress reset.");
+});
+document.getElementById("continueBtn").addEventListener("click", goToMap);
+document.getElementById("lockedOkBtn").addEventListener("click", ()=>{
+  lockedScreen.classList.add("hidden");
+});
+document.getElementById("finaleBtn").addEventListener("click", ()=>{
+  localStorage.removeItem(SAVE_KEY);
+  LOCATIONS.forEach(l=>{l.defeated=false;});
+  refreshUnlocks();
+  goToMap();
+});
+
+refreshUnlocks();
+applySave(loadSave());
+requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>
