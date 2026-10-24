@@ -4,15 +4,20 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dissent — A Stick Figure Saga</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
     --bg:#0b0d14; --panel:#141826cc; --line:#2a3350; --accent:#7bd7ff;
     --accent2:#ff5c7a; --dark:#8a4bff; --hp:#4caf50; --hplow:#e0402f;
-    --en:#3fb6ff; --text:#e8ecf7; --muted:#8c95b3;
+    --en:#3fb6ff; --text:#e8ecf7; --muted:#8c95b3; --gold:#ffd166;
+    --font-display:'Baloo 2', system-ui, sans-serif;
+    --font-body:'Quicksand', system-ui, sans-serif;
   }
   *{box-sizing:border-box;}
   html,body{margin:0;height:100%;background:radial-gradient(ellipse at 50% -10%,#1a2036,#05060a 70%);
-    color:var(--text);font-family:'Segoe UI',system-ui,Arial,sans-serif;overflow:hidden;}
+    color:var(--text);font-family:var(--font-body);overflow:hidden;}
   #wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:10px;}
   #stage{position:relative;width:min(96vw,1000px);aspect-ratio:1000/650;}
   canvas{width:100%;height:100%;display:block;background:#0d0f18;border:2px solid var(--line);border-radius:10px;
@@ -20,15 +25,20 @@
   .overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
     text-align:center;background:#05060ac9;border-radius:10px;padding:20px;gap:14px;}
   .hidden{display:none !important;}
-  h1{font-size:clamp(26px,5vw,44px);margin:0;letter-spacing:2px;
-    background:linear-gradient(90deg,var(--accent),var(--dark));-webkit-background-clip:text;background-clip:text;color:transparent;}
-  h2{margin:0;font-size:clamp(20px,4vw,30px);color:var(--accent);}
+  h1{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,5.5vw,48px);margin:0;letter-spacing:1px;
+    background:linear-gradient(90deg,var(--accent),var(--dark));-webkit-background-clip:text;background-clip:text;color:transparent;
+    animation:bob 3.2s ease-in-out infinite;}
+  @keyframes bob{0%,100%{transform:translateY(0) rotate(-0.5deg);}50%{transform:translateY(-5px) rotate(0.5deg);}}
+  @media (prefers-reduced-motion: reduce){ h1{animation:none;} }
+  h2{font-family:var(--font-display);font-weight:600;margin:0;font-size:clamp(20px,4vw,30px);color:var(--accent);}
   p{color:var(--muted);max-width:640px;line-height:1.5;margin:2px 0;}
-  .btn{background:linear-gradient(180deg,#20263f,#141826);border:1px solid var(--line);color:var(--text);
-    padding:10px 22px;border-radius:8px;font-size:16px;cursor:pointer;transition:.15s;}
-  .btn:hover{border-color:var(--accent);color:var(--accent);transform:translateY(-1px);}
-  .btn:active{transform:translateY(0);}
+  .btn{font-family:var(--font-display);font-weight:600;background:linear-gradient(180deg,#20263f,#141826);
+    border:1px solid var(--line);color:var(--text);
+    padding:10px 24px;border-radius:16px;font-size:16px;cursor:pointer;transition:.15s;}
+  .btn:hover{border-color:var(--accent);color:var(--accent);transform:translateY(-1px) rotate(-0.5deg);}
+  .btn:active{transform:translateY(0) rotate(0);}
   .btn.big{font-size:20px;padding:14px 34px;}
+  .btn.small{font-size:13px;padding:6px 14px;border-radius:12px;}
   .keys{display:grid;grid-template-columns:repeat(2,auto);gap:4px 22px;text-align:left;color:var(--muted);font-size:14px;margin-top:6px;}
   .keys b{color:var(--accent);}
   #hud{position:absolute;left:0;right:0;top:0;padding:10px 14px;display:flex;justify-content:space-between;pointer-events:none;font-size:13px;}
@@ -44,15 +54,20 @@
   .float{position:absolute;font-weight:800;font-size:18px;text-shadow:0 2px 4px #000;animation:rise 1s ease-out forwards;}
   @keyframes rise{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-46px)}}
   #abilityBar{position:absolute;left:0;right:0;bottom:8px;display:flex;justify-content:center;gap:6px;flex-wrap:wrap;padding:0 8px;}
-  .ability{position:relative;width:64px;height:64px;border-radius:10px;border:1px solid var(--line);
+  .ability{position:relative;width:64px;height:64px;border-radius:14px;border:1px solid var(--line);
     background:linear-gradient(180deg,#1c2338,#10131f);color:var(--text);cursor:pointer;display:flex;
-    flex-direction:column;align-items:center;justify-content:center;font-size:10px;gap:3px;user-select:none;}
+    flex-direction:column;align-items:center;justify-content:center;font-size:10px;gap:3px;user-select:none;
+    font-family:var(--font-body);font-weight:600;transition:transform .12s;}
+  .ability:hover:not(.locked):not(.unlearned){transform:translateY(-2px);}
   .ability .k{font-size:9px;color:var(--muted);position:absolute;top:3px;left:5px;}
   .ability .ic{font-size:20px;}
-  .ability .cd{position:absolute;inset:0;background:#000a;border-radius:10px;display:flex;align-items:center;
+  .ability .cd{position:absolute;inset:0;background:#000a;border-radius:14px;display:flex;align-items:center;
     justify-content:center;font-size:16px;color:#fff;}
+  .ability .lock{position:absolute;inset:0;background:#000c;border-radius:14px;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;font-size:11px;color:var(--gold);gap:2px;}
   .ability.locked{opacity:.35;filter:grayscale(1);cursor:default;}
-  .ability:hover:not(.locked){border-color:var(--accent);}
+  .ability.unlearned{cursor:default;}
+  .ability:hover:not(.locked):not(.unlearned){border-color:var(--accent);}
   #toast{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#0d0f18ee;
     border:1px solid var(--accent);padding:16px 26px;border-radius:10px;font-size:18px;text-align:center;
     pointer-events:none;opacity:0;transition:opacity .3s;}
@@ -60,6 +75,24 @@
   #mapHint{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);background:#0d0f18cc;
     border:1px solid var(--line);padding:6px 14px;border-radius:8px;font-size:13px;color:var(--muted);}
   footer{color:#4b5372;font-size:11px;margin-top:8px;}
+
+  #mapTopBar{position:absolute;left:0;right:0;top:0;padding:10px 14px;display:flex;justify-content:space-between;
+    align-items:center;}
+  #currencyDisplay{background:#0d0f18cc;border:1px solid var(--line);border-radius:14px;padding:6px 14px;
+    font-family:var(--font-display);font-weight:600;color:var(--gold);font-size:14px;}
+  .overlay.wide{width:min(94%,760px);max-height:92%;overflow-y:auto;}
+  #shopList{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;width:100%;margin-top:4px;}
+  .shopCard{background:linear-gradient(180deg,#1c2338,#10131f);border:1px solid var(--line);border-radius:14px;
+    padding:12px 10px;display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;}
+  .shopCard .ic{font-size:26px;}
+  .shopCard .nm{font-family:var(--font-display);font-weight:600;font-size:14px;color:var(--text);}
+  .shopCard .ds{font-size:11px;color:var(--muted);line-height:1.3;min-height:28px;}
+  .shopCard .price{font-family:var(--font-display);font-weight:600;color:var(--gold);font-size:13px;}
+  .shopCard button{font-family:var(--font-display);font-weight:600;border-radius:10px;border:1px solid var(--line);
+    padding:5px 12px;font-size:12px;cursor:pointer;background:linear-gradient(180deg,#223049,#141c2c);color:var(--text);}
+  .shopCard button:disabled{opacity:.5;cursor:default;}
+  .shopCard button.owned{background:linear-gradient(180deg,#1f3a24,#122017);color:#8bd93f;border-color:#2f5a34;}
+  #shardsInShop{font-family:var(--font-display);font-weight:600;color:var(--gold);}
 </style>
 </head>
 <body>
@@ -72,18 +105,30 @@
     <div id="abilityBar" class="hidden"></div>
     <div id="toast"></div>
     <div id="mapHint" class="hidden">WASD / Arrows to walk. Step on a location, then press <b>E</b> to enter.</div>
+    <div id="mapTopBar" class="hidden">
+      <div id="currencyDisplay">✨ <span id="shardCount">0</span> Shards</div>
+      <button class="btn small" id="shopBtn">🛒 Shop</button>
+    </div>
 
     <div id="menuScreen" class="overlay">
       <h1>DISSENT</h1>
-      <p>A stick figure awakens with fractured combat instincts. Wander the map, find rivals, and master eight
-      forms of violence: <b>Hit</b>, <b>Kick</b>, <b>Incise</b>, <b>Penetrate</b>, <b>Corner</b>, <b>Cornerstone</b>,
-      <b>Manic Dissent</b>, and <b>Dark Dissent</b>.</p>
+      <p>A stick figure awakens with fractured combat instincts. Wander the map, find rivals, and earn Shards to
+      learn forms of violence beyond a simple <b>Hit</b> and <b>Kick</b>: <b>Incise</b>, <b>Penetrate</b>,
+      <b>Corner</b>, <b>Cornerstone</b>, <b>Manic Dissent</b>, <b>Dark Dissent</b>, and more, from the Shop.</p>
       <div class="keys">
         <div><b>WASD / Arrows</b> — move</div><div><b>E</b> — enter location</div>
-        <div><b>1-8</b> — use ability</div><div><b>Space</b> — block / brace</div>
+        <div><b>1-0</b> — use ability</div><div><b>Space</b> — block / brace</div>
       </div>
       <button class="btn big" id="startBtn">Begin</button>
       <button class="btn" id="resetBtn">Reset Progress</button>
+    </div>
+
+    <div id="shopScreen" class="overlay wide hidden">
+      <h2>🛒 Shop</h2>
+      <p>Spend Shards earned in battle to learn new forms of combat.</p>
+      <div id="shardsInShop">✨ <span id="shopShardCount">0</span> Shards</div>
+      <div id="shopList"></div>
+      <button class="btn" id="shopBackBtn">Back to Map</button>
     </div>
 
     <div id="resultScreen" class="overlay hidden">
@@ -113,17 +158,30 @@
 
 /* ---------- persistence ---------- */
 const SAVE_KEY = "dissent_stick_saga_v1";
+const STARTER_ABILITIES = ["Hit","Kick"];
+let shards = 0;
+let ownedAbilities = new Set(STARTER_ABILITIES);
 function loadSave(){
   try{ return JSON.parse(localStorage.getItem(SAVE_KEY)) || null; }catch(e){ return null; }
 }
 function writeSave(){
   const defeated = LOCATIONS.map(l=>l.defeated);
-  localStorage.setItem(SAVE_KEY, JSON.stringify({defeated}));
+  localStorage.setItem(SAVE_KEY, JSON.stringify({defeated, shards, owned:[...ownedAbilities]}));
 }
 function applySave(save){
   if(!save) return;
   LOCATIONS.forEach((l,i)=>{ l.defeated = !!save.defeated[i]; });
+  shards = save.shards||0;
+  ownedAbilities = new Set(save.owned && save.owned.length ? save.owned : STARTER_ABILITIES);
+  STARTER_ABILITIES.forEach(n=>ownedAbilities.add(n));
   refreshUnlocks();
+  updateCurrencyUI();
+}
+function isOwned(a){ return ownedAbilities.has(a.name); }
+function updateCurrencyUI(){
+  const a = document.getElementById("shardCount"), b = document.getElementById("shopShardCount");
+  if(a) a.textContent = shards;
+  if(b) b.textContent = shards;
 }
 
 /* ---------- canvas / dom ---------- */
@@ -140,6 +198,8 @@ const menuScreen = document.getElementById("menuScreen");
 const resultScreen = document.getElementById("resultScreen");
 const lockedScreen = document.getElementById("lockedScreen");
 const finaleScreen = document.getElementById("finaleScreen");
+const shopScreen = document.getElementById("shopScreen");
+const mapTopBar = document.getElementById("mapTopBar");
 
 /* ---------- audio (tiny synth, no files) ---------- */
 let actx=null;
@@ -165,6 +225,10 @@ const sfx = {
   flurry:()=>beep(320,0.05,"square",0.045),
   dark:()=>beep(60,0.4,"sawtooth",0.1),
   hurt:()=>beep(150,0.1,"noise",0.05),
+  feint:()=>beep(700,0.08,"sine",0.05),
+  reap:()=>beep(50,0.35,"square",0.09),
+  coin:()=>{beep(880,0.06,"square",0.05);setTimeout(()=>beep(1180,0.08,"square",0.05),70);},
+  buy:()=>{beep(520,0.08,"triangle",0.06);setTimeout(()=>beep(780,0.12,"triangle",0.06),90);},
   win:()=>{beep(440,0.15,"triangle",0.07);setTimeout(()=>beep(660,0.2,"triangle",0.07),140);},
   lose:()=>{beep(220,0.3,"sawtooth",0.08);setTimeout(()=>beep(120,0.4,"sawtooth",0.08),160);},
 };
@@ -181,8 +245,8 @@ window.addEventListener("keyup", e=> keys.delete(e.key.toLowerCase()));
 function handleKeyAction(k){
   if(state.mode==="map" && k==="e") tryEnterLocation();
   if(state.mode==="battle"){
-    const idx = "12345678".indexOf(k);
-    if(idx>=0) useAbility(ABILITIES[idx]);
+    const idx = "1234567890".indexOf(k);
+    if(idx>=0 && ABILITIES[idx]) useAbility(ABILITIES[idx]);
   }
 }
 
@@ -400,30 +464,30 @@ function drawStick(c,x,y,dir,opts){
 
 /* ================= ABILITIES ================= */
 const ABILITIES = [
-  {key:"1",name:"Hit",icon:"👊",cost:5,cd:0.6,range:70,windup:0.10,active:0.10,
+  {key:"1",name:"Hit",icon:"👊",price:0,desc:"A plain jab. Always free.",cost:5,cd:0.6,range:70,windup:0.10,active:0.10,
    dmg:8,pierce:false,
    sfx:"hit", windupPose:"windup", hitPose:"hit",
    apply(user,target,scale){ dealDamage(user,target,this.dmg*(scale||1),this.pierce);
      pushBack(target, user, 6);
    }},
-  {key:"2",name:"Kick",icon:"🦵",cost:10,cd:1.2,range:78,windup:0.16,active:0.12,
+  {key:"2",name:"Kick",icon:"🦵",price:0,desc:"A heavy boot. Always free.",cost:10,cd:1.2,range:78,windup:0.16,active:0.12,
    dmg:12,pierce:false,
    sfx:"kick", windupPose:"kick_wind", hitPose:"kick",
    apply(user,target,scale){ dealDamage(user,target,this.dmg*(scale||1),this.pierce);
      pushBack(target, user, 46);
      addStatus(target,"stagger",0.5);
    }},
-  {key:"3",name:"Incise",icon:"🔪",cost:15,cd:3.0,range:74,windup:0.14,active:0.12,
+  {key:"3",name:"Incise",icon:"🔪",price:20,desc:"A shallow cut that bleeds over time.",cost:15,cd:3.0,range:74,windup:0.14,active:0.12,
    dmg:6,pierce:false,
    sfx:"slash", windupPose:"slash_wind", hitPose:"slash",
    apply(user,target,scale){ dealDamage(user,target,this.dmg*(scale||1),this.pierce);
      addStatus(target,"bleed",4.0,{dps:4*(scale||1)});
    }},
-  {key:"4",name:"Penetrate",icon:"🗡️",cost:20,cd:4.0,range:84,windup:0.20,active:0.14,
+  {key:"4",name:"Penetrate",icon:"🗡️",price:35,desc:"A thrust that ignores armor entirely.",cost:20,cd:4.0,range:84,windup:0.20,active:0.14,
    dmg:20,pierce:true,
    sfx:"thrust", windupPose:"thrust_wind", hitPose:"thrust",
    apply(user,target,scale){ dealDamage(user,target,this.dmg*(scale||1),this.pierce); }},
-  {key:"5",name:"Corner",icon:"🧱",cost:15,cd:5.0,range:74,windup:0.14,active:0.12,
+  {key:"5",name:"Corner",icon:"🧱",price:30,desc:"Pin a rival near a wall to punish them.",cost:15,cd:5.0,range:74,windup:0.14,active:0.12,
    dmg:5,pierce:false,
    sfx:"pin", windupPose:"grab", hitPose:"grab",
    apply(user,target,scale){
@@ -437,14 +501,14 @@ const ABILITIES = [
        target.vx += dir*220;
      }
    }},
-  {key:"6",name:"Cornerstone",icon:"🛡️",cost:20,cd:8.0,range:0,windup:0.10,active:0.0,
+  {key:"6",name:"Cornerstone",icon:"🛡️",price:40,desc:"Plant your stance: shield damage and reflect some back.",cost:20,cd:8.0,range:0,windup:0.10,active:0.0,
    dmg:0,pierce:false, self:true,
    sfx:"shield", windupPose:"brace", hitPose:"brace",
    apply(user){
      addStatus(user,"shield",3.0,{amount:26});
      addStatus(user,"reflect",3.0,{pct:0.3});
    }},
-  {key:"7",name:"Manic Dissent",icon:"💢",cost:30,cd:6.0,range:72,windup:0.12,active:1.0,
+  {key:"7",name:"Manic Dissent",icon:"💢",price:55,desc:"A frenzied 5-hit flurry of blows.",cost:30,cd:6.0,range:72,windup:0.12,active:1.0,
    dmg:4,pierce:false,hits:5,
    sfx:"flurry", windupPose:"windup", hitPose:"flurry",
    apply(user,target,scale){
@@ -453,24 +517,35 @@ const ABILITIES = [
        setTimeout(()=>{ if(target.hp>0 && user.hp>0) dealDamage(user,target,dmg,this.pierce,true); }, i*140);
      }
    }},
-  {key:"8",name:"Dark Dissent",icon:"🌑",cost:48,cd:15.0,range:100,windup:0.30,active:0.2,
+  {key:"8",name:"Dark Dissent",icon:"🌑",price:90,desc:"An armor-piercing ultimate nuke.",cost:48,cd:15.0,range:100,windup:0.30,active:0.2,
    dmg:42,pierce:true,
    sfx:"dark", windupPose:"dark_wind", hitPose:"dark",
    apply(user,target,scale){
      dealDamage(user,target,this.dmg*(scale||1),this.pierce);
      screenFlash("#8a4bff33");
    }},
+  {key:"9",name:"Feint",icon:"🎭",price:25,desc:"Fake them out — dodge the very next hit entirely.",cost:12,cd:4.0,range:0,windup:0.08,active:0.0,
+   dmg:0,pierce:false, self:true,
+   sfx:"feint", windupPose:"block", hitPose:"block",
+   apply(user){ addStatus(user,"evade",1.5,{charges:1}); }},
+  {key:"0",name:"Reaper's Toll",icon:"💀",price:70,desc:"Execute: deals more damage the lower a rival's health.",cost:35,cd:10.0,range:86,windup:0.22,active:0.16,
+   dmg:14,pierce:true,
+   sfx:"reap", windupPose:"dark_wind", hitPose:"dark",
+   apply(user,target,scale){
+     const missing = target.maxHp - target.hp;
+     dealDamage(user,target,(this.dmg + missing*0.35)*(scale||1), this.pierce);
+   }},
 ];
 
 /* ================= BATTLE ================= */
 const ARENA = {left:60,right:940,ground:520};
 const ENEMY_TYPES = {
-  dummy:   {name:"Training Dummy", hp:40, dmg:4, def:0, aggro:0.5, pool:["hit"], color:"#c9cfe6"},
-  brawler: {name:"Bridge Brawler", hp:65, dmg:7, def:2, aggro:0.8, pool:["hit","kick"], color:"#e0a24c"},
-  thug:    {name:"Alley Thug",     hp:80, dmg:8, def:3, aggro:0.9, pool:["hit","kick","corner"], color:"#e05c5c"},
-  stalker: {name:"Hollow Stalker", hp:95, dmg:9, def:4, aggro:1.0, pool:["incise","penetrate","hit"], color:"#5ce0a0"},
-  wretch:  {name:"Frenzied Wretch",hp:110,dmg:9, def:3, aggro:1.3, pool:["hit","kick","manic"], color:"#e05ce0"},
-  wraith:  {name:"Dissent Wraith", hp:160,dmg:12,def:6, aggro:1.1, pool:["penetrate","corner","dark","incise"], color:"#8a4bff"},
+  dummy:   {name:"Training Dummy", hp:40, dmg:4, def:0, aggro:0.5, pool:["hit"], color:"#c9cfe6", reward:15},
+  brawler: {name:"Bridge Brawler", hp:65, dmg:7, def:2, aggro:0.8, pool:["hit","kick"], color:"#e0a24c", reward:25},
+  thug:    {name:"Alley Thug",     hp:80, dmg:8, def:3, aggro:0.9, pool:["hit","kick","corner"], color:"#e05c5c", reward:35},
+  stalker: {name:"Hollow Stalker", hp:95, dmg:9, def:4, aggro:1.0, pool:["incise","penetrate","hit"], color:"#5ce0a0", reward:45},
+  wretch:  {name:"Frenzied Wretch",hp:110,dmg:9, def:3, aggro:1.3, pool:["hit","kick","manic"], color:"#e05ce0", reward:55},
+  wraith:  {name:"Dissent Wraith", hp:160,dmg:12,def:6, aggro:1.1, pool:["penetrate","corner","dark","incise"], color:"#8a4bff", reward:80},
 };
 
 let state = { mode:"menu" };
@@ -503,6 +578,7 @@ function startBattle(loc){
   hud.classList.remove("hidden");
   abilityBar.classList.remove("hidden");
   mapHint.classList.add("hidden");
+  mapTopBar.classList.add("hidden");
   buildAbilityBar();
   showToast(`${ENEMY_TYPES[loc.enemy].name} blocks your path!`);
 }
@@ -512,7 +588,7 @@ function buildAbilityBar(){
   ABILITIES.forEach(a=>{
     const div=document.createElement("div");
     div.className="ability";
-    div.innerHTML=`<span class="k">${a.key}</span><span class="ic">${a.icon}</span><span>${a.name}</span><div class="cd hidden"></div>`;
+    div.innerHTML=`<span class="k">${a.key}</span><span class="ic">${a.icon}</span><span>${a.name}</span><div class="cd hidden"></div><div class="lock hidden">🔒<span>${a.price||0}</span></div>`;
     div.addEventListener("click",()=>useAbility(a));
     div.dataset.name=a.name;
     abilityBar.appendChild(div);
@@ -526,6 +602,12 @@ function hasStatus(f,name){ return !!f.statuses[name]; }
 
 function dealDamage(user,target,base,pierce,noKnock){
   if(target.hp<=0) return;
+  if(hasStatus(target,"evade") && target.statuses.evade.charges>0){
+    target.statuses.evade.charges--;
+    if(target.statuses.evade.charges<=0) delete target.statuses.evade;
+    spawnFloat(target,"dodge!","#7bd7ff");
+    return;
+  }
   let dmg = base;
   if(!pierce) dmg = Math.max(1, dmg - target.def);
   if(hasStatus(target,"block")) dmg *= pierce ? 0.7 : 0.35;
@@ -556,6 +638,7 @@ function pushBack(target, from, amount){
 
 function useAbility(a){
   if(state.mode!=="battle") return;
+  if(!isOwned(a)){ showToast(`${a.name} not learned — visit the Shop`, 900); return; }
   if(player.hp<=0 || player.actionLock>0) return;
   if(player.cooldowns[a.name] > 0) return;
   if(player.energy < a.cost) { showToast("Not enough energy!", 500); return; }
@@ -671,12 +754,17 @@ function onBattleEnd(playerWon){
   abilityBar.classList.add("hidden");
   if(playerWon){
     sfx.win();
+    const reward = ENEMY_TYPES[activeLocation.enemy].reward;
+    const wasDefeated = activeLocation.defeated;
     activeLocation.defeated = true;
+    shards += reward;
     refreshUnlocks();
     writeSave();
+    updateCurrencyUI();
     document.getElementById("resultTitle").textContent="Victory";
     document.getElementById("resultText").textContent =
-      `${ENEMY_TYPES[activeLocation.enemy].name} falls. The path onward opens.`;
+      `${ENEMY_TYPES[activeLocation.enemy].name} falls. +${reward} Shards.` +
+      (wasDefeated ? "" : " The path onward opens.");
   } else {
     sfx.lose();
     document.getElementById("resultTitle").textContent="Defeated";
@@ -747,6 +835,17 @@ function renderHud(){
   [...abilityBar.children].forEach((el,i)=>{
     const a=ABILITIES[i];
     const cdEl=el.querySelector(".cd");
+    const lockEl=el.querySelector(".lock");
+    if(!isOwned(a)){
+      lockEl.classList.remove("hidden");
+      cdEl.classList.add("hidden");
+      el.classList.add("unlearned");
+      el.classList.remove("locked");
+      el.style.outline="none";
+      return;
+    }
+    lockEl.classList.add("hidden");
+    el.classList.remove("unlearned");
     const cd=player.cooldowns[a.name]||0;
     const dist=Math.abs(player.x-enemy.x);
     const outOfRange = !a.self && dist>a.range;
@@ -796,6 +895,39 @@ function loop(ts){
   requestAnimationFrame(loop);
 }
 
+/* ================= SHOP ================= */
+function buildShop(){
+  const list = document.getElementById("shopList");
+  list.innerHTML="";
+  ABILITIES.forEach(a=>{
+    const owned = isOwned(a);
+    const price = a.price||0;
+    const card = document.createElement("div");
+    card.className="shopCard";
+    const affordable = shards>=price;
+    card.innerHTML = `
+      <div class="ic">${a.icon}</div>
+      <div class="nm">${a.name}</div>
+      <div class="ds">${a.desc||""}</div>
+      <div class="price">${owned?"":"✨ "+price}</div>
+      <button ${owned?"disabled class=\"owned\"":(!affordable?"disabled":"")}>${owned?"Learned ✓":(price===0?"Free":"Learn")}</button>
+    `;
+    if(!owned && price>0){
+      card.querySelector("button").addEventListener("click", ()=>{
+        if(shards<price) return;
+        shards -= price;
+        ownedAbilities.add(a.name);
+        writeSave();
+        updateCurrencyUI();
+        sfx.buy();
+        showToast(`Learned ${a.name}!`);
+        buildShop();
+      });
+    }
+    list.appendChild(card);
+  });
+}
+
 /* ================= SCREENS / FLOW ================= */
 function goToMap(){
   state={mode:"map"};
@@ -803,7 +935,10 @@ function goToMap(){
   lockedScreen.classList.add("hidden");
   menuScreen.classList.add("hidden");
   finaleScreen.classList.add("hidden");
+  shopScreen.classList.add("hidden");
   mapHint.classList.remove("hidden");
+  mapTopBar.classList.remove("hidden");
+  updateCurrencyUI();
   if(LOCATIONS.every(l=>l.defeated)){
     finaleScreen.classList.remove("hidden");
   }
@@ -816,7 +951,10 @@ document.getElementById("startBtn").addEventListener("click", ()=>{
 document.getElementById("resetBtn").addEventListener("click", ()=>{
   localStorage.removeItem(SAVE_KEY);
   LOCATIONS.forEach(l=>{l.defeated=false;});
+  shards = 0;
+  ownedAbilities = new Set(STARTER_ABILITIES);
   refreshUnlocks();
+  updateCurrencyUI();
   showToast("Progress reset.");
 });
 document.getElementById("continueBtn").addEventListener("click", goToMap);
@@ -826,7 +964,21 @@ document.getElementById("lockedOkBtn").addEventListener("click", ()=>{
 document.getElementById("finaleBtn").addEventListener("click", ()=>{
   localStorage.removeItem(SAVE_KEY);
   LOCATIONS.forEach(l=>{l.defeated=false;});
+  shards = 0;
+  ownedAbilities = new Set(STARTER_ABILITIES);
   refreshUnlocks();
+  goToMap();
+});
+document.getElementById("shopBtn").addEventListener("click", ()=>{
+  state={mode:"shop"};
+  mapHint.classList.add("hidden");
+  mapTopBar.classList.add("hidden");
+  buildShop();
+  updateCurrencyUI();
+  shopScreen.classList.remove("hidden");
+});
+document.getElementById("shopBackBtn").addEventListener("click", ()=>{
+  shopScreen.classList.add("hidden");
   goToMap();
 });
 
