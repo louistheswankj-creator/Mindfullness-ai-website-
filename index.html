@@ -54,7 +54,7 @@
   #floaters{position:absolute;inset:0;pointer-events:none;overflow:hidden;}
   .float{position:absolute;font-weight:800;font-size:18px;text-shadow:0 2px 4px #000;animation:rise 1s ease-out forwards;}
   @keyframes rise{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-46px)}}
-  #abilityBar{position:absolute;left:0;right:0;bottom:4px;display:flex;justify-content:center;gap:clamp(2px,0.8vw,6px);flex-wrap:nowrap;padding:0 4px;}
+  #abilityBar{width:min(96vw,1000px);margin-top:8px;display:flex;justify-content:center;gap:clamp(2px,0.8vw,6px);flex-wrap:nowrap;padding:0 4px;}
   .ability{position:relative;flex:0 1 clamp(28px,6vw,60px);aspect-ratio:1;max-width:60px;border-radius:12px;border:1px solid var(--line);
     background:linear-gradient(180deg,#1c2338,#10131f);color:var(--text);cursor:pointer;display:flex;
     flex-direction:column;align-items:center;justify-content:center;font-size:clamp(7px,1.3vw,10px);gap:2px;user-select:none;
@@ -103,7 +103,6 @@
 
     <div id="hud" class="hidden"></div>
     <div id="floaters"></div>
-    <div id="abilityBar" class="hidden"></div>
     <div id="toast"></div>
     <div id="mapHint" class="hidden">WASD / Arrows to walk. Step on a location, then press <b>E</b> to enter.</div>
     <div id="mapTopBar" class="hidden">
@@ -150,6 +149,7 @@
       <button class="btn big" id="finaleBtn">New Game+</button>
     </div>
   </div>
+  <div id="abilityBar" class="hidden"></div>
   <footer>Move with WASD/Arrows · Fight with 1-8 · Progress autosaves in your browser</footer>
 </div>
 
