@@ -288,7 +288,7 @@ function refreshUnlocks(){
   PATH.forEach(([a,b])=>{ if(LOCATIONS[a].defeated) LOCATIONS[b].unlocked = true; });
 }
 
-const mapPlayer = {x:130,y:540,dir:1,walking:false,t:0};
+const mapPlayer = {x:130,y:540,dir:1,walking:false,t:0,moveDirX:0,moveDirZ:-1};
 let activeLocation = null;
 
 function tryEnterLocation(){
@@ -319,6 +319,8 @@ function updateMapLogic(dt){
   mapPlayer.walking = !!moving;
   if(moving){
     const len = Math.hypot(dx,dy)||1;
+    mapPlayer.moveDirX = dx/len;
+    mapPlayer.moveDirZ = dy/len;
     mapPlayer.x += (dx/len)*160*dt;
     mapPlayer.y += (dy/len)*160*dt;
     mapPlayer.dir = dx>=0?1:-1;
@@ -725,7 +727,7 @@ function showToast(msg,dur){
 }
 
 /* ================= 3D RENDERING ================= */
-const LEG_LEN=22, TORSO_LEN=28, SHOULDER_FRAC=0.8, HEAD_R=7, NECK_GAP=3;
+const LEG_LEN=22, TORSO_LEN=28, SHOULDER_FRAC=0.8, HEAD_R=7, NECK_GAP=3, EYE_Y=58;
 const LIMB_R=2.6, TORSO_R=3.6, ARM_LEN=16, ARM_SPACING=3.2, LEG_SPACING=3.2;
 const HEAD_Y = TORSO_LEN + HEAD_R + NECK_GAP;
 const MAP_CX = 500, MAP_CZ = 325;
@@ -900,7 +902,7 @@ function initRenderer(){
   renderer.shadowMap.enabled = true;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
   sceneHost.appendChild(renderer.domElement);
-  camera = new THREE.PerspectiveCamera(50, 1000/650, 1, 4000);
+  camera = new THREE.PerspectiveCamera(74, 1000/650, 0.5, 4000);
   const resize = ()=>{
     const w = sceneHost.clientWidth||1, h = sceneHost.clientHeight||1;
     renderer.setSize(w,h,false);
@@ -965,6 +967,7 @@ function buildMapScene(){
   });
 
   mapPlayerRig = createStickRig(0x7bd7ff);
+  mapPlayerRig.root.visible = false; // first-person: don't render your own body
   mapScene.add(mapPlayerRig.root);
 }
 
@@ -981,6 +984,9 @@ function updateMapBeacons(dt){
   });
 }
 
+const camFacing = new THREE.Vector3(mapPlayer.moveDirX, 0, mapPlayer.moveDirZ).normalize();
+let mapBobT = 0;
+
 function updateMapScene(dt){
   updateMapLogic(dt);
   const wx = mapPlayer.x-MAP_CX, wz = mapPlayer.y-MAP_CZ;
@@ -988,9 +994,13 @@ function updateMapScene(dt){
   applyPose(mapPlayerRig, mapPlayer.dir, {t:mapPlayer.t, walking:mapPlayer.walking, pose:"idle"});
   updateMapBeacons(dt);
 
-  const desired = new THREE.Vector3(wx, 230, wz+260);
-  camera.position.lerp(desired, 0.08);
-  camera.lookAt(wx, 10, wz);
+  // first-person: eye-level camera that turns to face the direction you're walking
+  camFacing.lerp(new THREE.Vector3(mapPlayer.moveDirX,0,mapPlayer.moveDirZ), 0.15);
+  if(camFacing.lengthSq()>0.0001) camFacing.normalize();
+  mapBobT += dt*(mapPlayer.walking?8:0);
+  const bob = mapPlayer.walking ? Math.sin(mapBobT)*1.6 : 0;
+  camera.position.set(wx, EYE_Y+bob, wz);
+  camera.lookAt(wx+camFacing.x*20, EYE_Y+bob, wz+camFacing.z*20);
 
   mapHint.classList.remove("hidden");
   lastActiveScene = mapScene;
@@ -1039,11 +1049,9 @@ function buildBattleScene(enemyKind){
   });
 
   battleRigP = createStickRig(0x7bd7ff);
+  battleRigP.root.visible = false; // first-person: don't render your own body
   battleRigE = createStickRig(theme.accent);
   battleScene.add(battleRigP.root, battleRigE.root);
-
-  camera.position.set(0,112,430);
-  camera.lookAt(0,82,0);
 }
 
 function updateBattleScene(dt){
@@ -1065,6 +1073,15 @@ function updateBattleScene(dt){
     battleRigE.mat.emissiveIntensity = 0.22;
   }
 
+  // first-person: camera at the player's eyes, always looking at the rival
+  const eyeX = player.x-BATTLE_CX, eyeZ = 2;
+  const bob = Math.abs(player.vx)>5 ? Math.sin(performance.now()*0.012)*1.2 : 0;
+  camera.position.set(eyeX, EYE_Y+bob, eyeZ);
+  const targetX = enemy.x-BATTLE_CX, targetZ = -2;
+  if(Math.hypot(targetX-eyeX, targetZ-eyeZ) > 0.5){
+    camera.lookAt(targetX, EYE_Y*0.9, targetZ);
+  }
+
   renderHud();
   lastActiveScene = battleScene;
 }
@@ -1074,6 +1091,7 @@ function fighterHeadWorld(f){
   return new THREE.Vector3(f.x-BATTLE_CX, 60, isPlayer?2:-2);
 }
 function project3D(vec3){
+  camera.updateMatrixWorld();
   const v=vec3.clone().project(camera);
   return { x:(v.x*0.5+0.5)*100, y:(1-(v.y*0.5+0.5))*100 };
 }
