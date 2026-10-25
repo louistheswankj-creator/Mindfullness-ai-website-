@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
 <style>
   :root{
     --bg:#0b0d14; --panel:#141826cc; --line:#2a3350; --accent:#7bd7ff;
@@ -20,8 +21,9 @@
     color:var(--text);font-family:var(--font-body);overflow:hidden;}
   #wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:10px;}
   #stage{position:relative;width:min(96vw,1000px);aspect-ratio:1000/650;}
-  canvas{width:100%;height:100%;display:block;background:#0d0f18;border:2px solid var(--line);border-radius:10px;
+  #sceneHost{position:absolute;inset:0;border-radius:10px;overflow:hidden;background:#0d0f18;border:2px solid var(--line);
     box-shadow:0 10px 40px #000a;}
+  #sceneHost canvas{width:100%;height:100%;display:block;}
   .overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
     text-align:center;background:#05060ac9;border-radius:10px;padding:20px;gap:14px;}
   .hidden{display:none !important;}
@@ -81,25 +83,27 @@
     align-items:center;}
   #currencyDisplay{background:#0d0f18cc;border:1px solid var(--line);border-radius:14px;padding:6px 14px;
     font-family:var(--font-display);font-weight:600;color:var(--gold);font-size:14px;}
+  .topBtns{display:flex;gap:6px;}
   .overlay.wide{width:min(94%,760px);max-height:92%;overflow-y:auto;}
-  #shopList{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;width:100%;margin-top:4px;}
+  #shopList,#armorList{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;width:100%;margin-top:4px;}
   .shopCard{background:linear-gradient(180deg,#1c2338,#10131f);border:1px solid var(--line);border-radius:14px;
     padding:12px 10px;display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;}
   .shopCard .ic{font-size:26px;}
   .shopCard .nm{font-family:var(--font-display);font-weight:600;font-size:14px;color:var(--text);}
   .shopCard .ds{font-size:11px;color:var(--muted);line-height:1.3;min-height:28px;}
   .shopCard .price{font-family:var(--font-display);font-weight:600;color:var(--gold);font-size:13px;}
+  .shopCard .stats{font-size:10px;color:var(--accent);min-height:14px;}
   .shopCard button{font-family:var(--font-display);font-weight:600;border-radius:10px;border:1px solid var(--line);
     padding:5px 12px;font-size:12px;cursor:pointer;background:linear-gradient(180deg,#223049,#141c2c);color:var(--text);}
   .shopCard button:disabled{opacity:.5;cursor:default;}
   .shopCard button.owned{background:linear-gradient(180deg,#1f3a24,#122017);color:#8bd93f;border-color:#2f5a34;}
-  #shardsInShop{font-family:var(--font-display);font-weight:600;color:var(--gold);}
+  #shardsInShop,#shardsInArmor{font-family:var(--font-display);font-weight:600;color:var(--gold);}
 </style>
 </head>
 <body>
 <div id="wrap">
   <div id="stage">
-    <canvas id="c" width="1000" height="650"></canvas>
+    <div id="sceneHost"></div>
 
     <div id="hud" class="hidden"></div>
     <div id="floaters"></div>
@@ -107,14 +111,17 @@
     <div id="mapHint" class="hidden">WASD / Arrows to walk. Step on a location, then press <b>E</b> to enter.</div>
     <div id="mapTopBar" class="hidden">
       <div id="currencyDisplay">✨ <span id="shardCount">0</span> Shards</div>
-      <button class="btn small" id="shopBtn">🛒 Shop</button>
+      <div class="topBtns">
+        <button class="btn small" id="shopBtn">🛒 Abilities</button>
+        <button class="btn small" id="armorBtn">🛡️ Armor</button>
+      </div>
     </div>
 
     <div id="menuScreen" class="overlay">
       <h1>DISSENT</h1>
-      <p>A stick figure awakens with fractured combat instincts. Wander the map, find rivals, and earn Shards to
-      learn forms of violence beyond a simple <b>Hit</b> and <b>Kick</b>: <b>Incise</b>, <b>Penetrate</b>,
-      <b>Corner</b>, <b>Cornerstone</b>, <b>Manic Dissent</b>, <b>Dark Dissent</b>, and more, from the Shop.</p>
+      <p>A stick figure awakens with fractured combat instincts in a fully 3D world. Wander the map, find rivals
+      across ten locations, and earn Shards to learn forms of violence beyond a simple <b>Hit</b> and <b>Kick</b>,
+      and to buy armor that makes you harder to put down.</p>
       <div class="keys">
         <div><b>WASD / Arrows</b> — move</div><div><b>E</b> — enter location</div>
         <div><b>1-0</b> — use ability</div><div><b>Space</b> — block / brace</div>
@@ -124,11 +131,19 @@
     </div>
 
     <div id="shopScreen" class="overlay wide hidden">
-      <h2>🛒 Shop</h2>
+      <h2>🛒 Ability Shop</h2>
       <p>Spend Shards earned in battle to learn new forms of combat.</p>
       <div id="shardsInShop">✨ <span id="shopShardCount">0</span> Shards</div>
       <div id="shopList"></div>
       <button class="btn" id="shopBackBtn">Back to Map</button>
+    </div>
+
+    <div id="armorScreen" class="overlay wide hidden">
+      <h2>🛡️ Armor Shop</h2>
+      <p>Armor stacks permanently once bought: more defense, more health, some pieces even speed up your recovery.</p>
+      <div id="shardsInArmor">✨ <span id="armorShardCount">0</span> Shards</div>
+      <div id="armorList"></div>
+      <button class="btn" id="armorBackBtn">Back to Map</button>
     </div>
 
     <div id="resultScreen" class="overlay hidden">
@@ -150,7 +165,7 @@
     </div>
   </div>
   <div id="abilityBar" class="hidden"></div>
-  <footer>Move with WASD/Arrows · Fight with 1-8 · Progress autosaves in your browser</footer>
+  <footer>Move with WASD/Arrows · Fight with 1-0 · Progress autosaves in your browser</footer>
 </div>
 
 <script>
@@ -158,16 +173,17 @@
 "use strict";
 
 /* ---------- persistence ---------- */
-const SAVE_KEY = "dissent_stick_saga_v1";
+const SAVE_KEY = "dissent_stick_saga_v2";
 const STARTER_ABILITIES = ["Hit","Kick"];
 let shards = 0;
 let ownedAbilities = new Set(STARTER_ABILITIES);
+let ownedArmor = new Set();
 function loadSave(){
   try{ return JSON.parse(localStorage.getItem(SAVE_KEY)) || null; }catch(e){ return null; }
 }
 function writeSave(){
   const defeated = LOCATIONS.map(l=>l.defeated);
-  localStorage.setItem(SAVE_KEY, JSON.stringify({defeated, shards, owned:[...ownedAbilities]}));
+  localStorage.setItem(SAVE_KEY, JSON.stringify({defeated, shards, owned:[...ownedAbilities], armor:[...ownedArmor]}));
 }
 function applySave(save){
   if(!save) return;
@@ -175,20 +191,19 @@ function applySave(save){
   shards = save.shards||0;
   ownedAbilities = new Set(save.owned && save.owned.length ? save.owned : STARTER_ABILITIES);
   STARTER_ABILITIES.forEach(n=>ownedAbilities.add(n));
+  ownedArmor = new Set(save.armor||[]);
   refreshUnlocks();
   updateCurrencyUI();
 }
 function isOwned(a){ return ownedAbilities.has(a.name); }
 function updateCurrencyUI(){
-  const a = document.getElementById("shardCount"), b = document.getElementById("shopShardCount");
-  if(a) a.textContent = shards;
-  if(b) b.textContent = shards;
+  [["shardCount"],["shopShardCount"],["armorShardCount"]].forEach(([id])=>{
+    const el = document.getElementById(id);
+    if(el) el.textContent = shards;
+  });
 }
 
-/* ---------- canvas / dom ---------- */
-const canvas = document.getElementById("c");
-const ctx = canvas.getContext("2d");
-const W = canvas.width, H = canvas.height;
+/* ---------- dom refs ---------- */
 const hud = document.getElementById("hud");
 const abilityBar = document.getElementById("abilityBar");
 const floaters = document.getElementById("floaters");
@@ -200,6 +215,7 @@ const resultScreen = document.getElementById("resultScreen");
 const lockedScreen = document.getElementById("lockedScreen");
 const finaleScreen = document.getElementById("finaleScreen");
 const shopScreen = document.getElementById("shopScreen");
+const armorScreen = document.getElementById("armorScreen");
 const mapTopBar = document.getElementById("mapTopBar");
 
 /* ---------- audio (tiny synth, no files) ---------- */
@@ -252,15 +268,20 @@ function handleKeyAction(k){
 }
 
 /* ================= MAP ================= */
+const MAP_W = 1000, MAP_H = 650;
 const LOCATIONS = [
-  {id:0,name:"Training Yard", x:130,y:470, enemy:"dummy", defeated:false, unlocked:true},
-  {id:1,name:"Stonebridge",   x:330,y:360, enemy:"brawler", defeated:false, unlocked:false},
-  {id:2,name:"Corner Alley",  x:560,y:470, enemy:"thug", defeated:false, unlocked:false},
-  {id:3,name:"Bleeding Hollow",x:420,y:210, enemy:"stalker", defeated:false, unlocked:false},
-  {id:4,name:"Manic Fields",  x:700,y:190, enemy:"wretch", defeated:false, unlocked:false},
-  {id:5,name:"Dark Sanctum",  x:880,y:100, enemy:"wraith", defeated:false, unlocked:false},
+  {id:0,name:"Training Yard",  x:130,y:470, enemy:"dummy",     defeated:false, unlocked:true},
+  {id:1,name:"Stonebridge",    x:330,y:360, enemy:"brawler",   defeated:false, unlocked:false},
+  {id:2,name:"Corner Alley",   x:560,y:470, enemy:"thug",      defeated:false, unlocked:false},
+  {id:3,name:"Bleeding Hollow",x:420,y:210, enemy:"stalker",   defeated:false, unlocked:false},
+  {id:4,name:"Manic Fields",   x:700,y:190, enemy:"wretch",    defeated:false, unlocked:false},
+  {id:5,name:"Dark Sanctum",   x:880,y:100, enemy:"wraith",    defeated:false, unlocked:false},
+  {id:6,name:"Iron Gate",      x:920,y:280, enemy:"sentinel",  defeated:false, unlocked:false},
+  {id:7,name:"Ashen Ruins",    x:850,y:450, enemy:"revenant",  defeated:false, unlocked:false},
+  {id:8,name:"Glass Caverns",  x:650,y:560, enemy:"wisp",      defeated:false, unlocked:false},
+  {id:9,name:"Hollow Throne",  x:420,y:600, enemy:"dissenter", defeated:false, unlocked:false},
 ];
-const PATH = [[0,1],[1,2],[2,3],[3,4],[4,5]];
+const PATH = [[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,8],[8,9]];
 
 function refreshUnlocks(){
   LOCATIONS[0].unlocked = true;
@@ -288,7 +309,7 @@ function nearestLocation(){
   return null;
 }
 
-function updateMap(dt){
+function updateMapLogic(dt){
   let dx=0, dy=0;
   if(keys.has("a")||keys.has("arrowleft")) dx-=1;
   if(keys.has("d")||keys.has("arrowright")) dx+=1;
@@ -301,166 +322,16 @@ function updateMap(dt){
     mapPlayer.x += (dx/len)*160*dt;
     mapPlayer.y += (dy/len)*160*dt;
     mapPlayer.dir = dx>=0?1:-1;
-    mapPlayer.x = Math.max(24,Math.min(W-24,mapPlayer.x));
-    mapPlayer.y = Math.max(24,Math.min(H-24,mapPlayer.y));
+    mapPlayer.x = Math.max(24,Math.min(MAP_W-24,mapPlayer.x));
+    mapPlayer.y = Math.max(24,Math.min(MAP_H-24,mapPlayer.y));
   }
   mapPlayer.t += dt;
-}
-
-function drawMap(){
-  ctx.clearRect(0,0,W,H);
-  const g = ctx.createLinearGradient(0,0,0,H);
-  g.addColorStop(0,"#141a2c"); g.addColorStop(1,"#05060a");
-  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
-
-  ctx.strokeStyle="#232a44"; ctx.lineWidth=1;
-  for(let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
-  for(let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
-
-  ctx.lineWidth=4;
-  PATH.forEach(([a,b])=>{
-    const A=LOCATIONS[a], B=LOCATIONS[b];
-    ctx.strokeStyle = B.unlocked ? "#4a5a8a" : "#232a44";
-    ctx.setLineDash(B.unlocked?[]:[6,8]);
-    ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke();
-  });
-  ctx.setLineDash([]);
-
-  LOCATIONS.forEach(l=>{
-    ctx.save();
-    ctx.translate(l.x,l.y);
-    const near = Math.hypot(mapPlayer.x-l.x,mapPlayer.y-l.y) < 46;
-    ctx.beginPath(); ctx.arc(0,0,near?24:20,0,Math.PI*2);
-    ctx.fillStyle = l.defeated ? "#243318" : (l.unlocked? "#1c2338":"#161a28");
-    ctx.fill();
-    ctx.lineWidth=2;
-    ctx.strokeStyle = l.defeated? "#6fbf3a" : (l.unlocked? "#7bd7ff":"#3a4166");
-    ctx.stroke();
-    if(!l.unlocked){
-      ctx.fillStyle="#5b6690"; ctx.font="16px sans-serif"; ctx.textAlign="center";
-      ctx.fillText("🔒",0,6);
-    } else if(l.defeated){
-      ctx.fillStyle="#8bd93f"; ctx.font="16px sans-serif"; ctx.textAlign="center";
-      ctx.fillText("✓",0,6);
-    }
-    ctx.restore();
-    ctx.fillStyle = l.unlocked? "#e8ecf7":"#4b5372";
-    ctx.font="13px sans-serif"; ctx.textAlign="center";
-    ctx.fillText(l.name, l.x, l.y-32);
-  });
-
-  drawStick(ctx, mapPlayer.x, mapPlayer.y, mapPlayer.dir, {
-    walking: mapPlayer.walking, t: mapPlayer.t, color:"#7bd7ff", pose:"idle"
-  });
-
-  mapHint.classList.remove("hidden");
 }
 
 function showLocked(loc){
   document.getElementById("lockedText").textContent =
     `${loc.name} is sealed. Clear the previous rival to open this path.`;
   lockedScreen.classList.remove("hidden");
-}
-
-/* ================= STICK FIGURE RENDERER ================= */
-// Generic procedural stick figure. pose drives limb angles; t is time for idle sway.
-function drawStick(c,x,y,dir,opts){
-  opts = opts||{};
-  const t = opts.t||0;
-  const color = opts.color||"#e8ecf7";
-  const scale = opts.scale||1;
-  const pose = opts.pose||"idle";
-  const walk = opts.walking && pose==="idle";
-
-  c.save();
-  c.translate(x,y);
-  c.scale(dir*scale, scale);
-  c.lineCap="round"; c.lineJoin="round";
-  c.strokeStyle = color; c.lineWidth = 4.5;
-
-  const headR = 9;
-  let bodyLen = 26, hipY = bodyLen;
-  let armA1=0, armA2=0, legA1=0, legA2=0, leanX=0, leanY=0;
-
-  const sway = Math.sin(t*6)*0.15;
-  if(walk){
-    legA1 = Math.sin(t*10)*0.6; legA2 = -Math.sin(t*10)*0.6;
-    armA1 = -Math.sin(t*10)*0.4; armA2 = Math.sin(t*10)*0.4;
-  } else {
-    legA1 = 0.08; legA2 = -0.08; armA1 = sway*0.5; armA2 = -sway*0.5;
-  }
-
-  switch(pose){
-    case "windup": leanX=-4; armA1=-1.4; armA2=-0.3; break;
-    case "hit": leanX=6; armA1=1.3; armA2=-0.2; break;
-    case "kick_wind": leanX=-4; legA1=-0.9; break;
-    case "kick": leanX=8; legA1=1.4; armA1=-0.6; break;
-    case "slash_wind": armA2=-1.6; leanX=-3; break;
-    case "slash": armA2=1.5; leanX=6; break;
-    case "thrust_wind": armA1=-1.7; leanX=-8; break;
-    case "thrust": armA1=1.9; leanX=10; break;
-    case "grab": armA1=0.9; armA2=0.9; leanX=4; break;
-    case "brace": armA1=-1.1; armA2=1.1; leanX=-3; legA1=0.3; legA2=-0.3; break;
-    case "flurry": armA1=Math.sin(t*40); armA2=-Math.sin(t*40); leanX=2; break;
-    case "dark_wind": armA1=-1.4; armA2=-1.4; leanY=-4; break;
-    case "dark": armA1=1.6; armA2=1.6; leanX=8; break;
-    case "hurt": leanX=-6; leanY=2; armA1=-0.3; armA2=0.3; break;
-    case "stun": leanX=Math.sin(t*20)*3; leanY=4; armA1=0.6; armA2=-0.6; break;
-    case "block": armA1=-0.6; armA2=0.6; leanX=-6; break;
-    case "ko": break;
-  }
-
-  c.translate(leanX, leanY);
-
-  if(pose==="ko"){
-    // fallen figure
-    c.save(); c.rotate(Math.PI/2);
-    c.beginPath(); c.arc(-bodyLen,0,headR,0,Math.PI*2); c.stroke();
-    c.beginPath(); c.moveTo(0,0); c.lineTo(-bodyLen+headR,0); c.stroke();
-    c.beginPath(); c.moveTo(0,0); c.lineTo(14,-10); c.moveTo(0,0); c.lineTo(14,10); c.stroke();
-    c.beginPath(); c.moveTo(-bodyLen+headR,0); c.lineTo(-bodyLen+headR-16,-8);
-    c.moveTo(-bodyLen+headR,0); c.lineTo(-bodyLen+headR-16,8); c.stroke();
-    c.restore();
-    c.restore();
-    return;
-  }
-
-  // head
-  c.beginPath(); c.arc(0,-hipY-headR*2,headR,0,Math.PI*2); c.stroke();
-  // spine
-  c.beginPath(); c.moveTo(0,-hipY); c.lineTo(0,-hipY*0.15); c.stroke();
-  const shoulderY = -hipY*0.75;
-  // arms
-  c.beginPath();
-  c.moveTo(0,shoulderY);
-  c.lineTo(Math.cos(armA1+1.3)*20, shoulderY+Math.sin(armA1+1.3)*20);
-  c.moveTo(0,shoulderY);
-  c.lineTo(Math.cos(armA2+1.9)*20, shoulderY+Math.sin(armA2+1.9)*20);
-  c.stroke();
-  // legs
-  c.beginPath();
-  c.moveTo(0,-hipY*0.15);
-  c.lineTo(Math.sin(legA1)*16, -hipY*0.15+22+Math.cos(legA1)*4);
-  c.moveTo(0,-hipY*0.15);
-  c.lineTo(Math.sin(legA2)*16, -hipY*0.15+22+Math.cos(legA2)*4);
-  c.stroke();
-
-  if(pose==="slash" || pose==="slash_wind"){
-    c.save(); c.strokeStyle=opts.accent||"#ff5c7a"; c.lineWidth=3;
-    c.beginPath();
-    const a = pose==="slash"?0.2:-1.2;
-    c.arc(Math.cos(armA2+1.9)*20, shoulderY+Math.sin(armA2+1.9)*20, 16, a, a+1.6);
-    c.stroke(); c.restore();
-  }
-  if(pose==="dark"){
-    c.save(); c.strokeStyle="#8a4bff"; c.globalAlpha=0.7;
-    for(let i=0;i<4;i++){
-      c.beginPath(); c.arc(0,-hipY*0.5,26+i*8,0,Math.PI*2); c.stroke();
-    }
-    c.restore();
-  }
-
-  c.restore();
 }
 
 /* ================= ABILITIES ================= */
@@ -538,31 +409,54 @@ const ABILITIES = [
    }},
 ];
 
+/* ================= ARMOR ================= */
+const ARMORS = [
+  {name:"Leather Wraps",     icon:"🥋", price:15,  def:4,  hp:0,  regen:0, desc:"Simple padding. A little less sting."},
+  {name:"Iron Plate",        icon:"🛡️", price:45,  def:9,  hp:20, regen:0, desc:"Heavy but dependable."},
+  {name:"Shadow Cloak",      icon:"🧥", price:65,  def:7,  hp:10, regen:4, desc:"Light armor that quickens recovery."},
+  {name:"Bone Guard",        icon:"🦴", price:95,  def:14, hp:30, regen:0, desc:"Grim trophies, grimly effective."},
+  {name:"Sanctum Aegis",     icon:"✨", price:150, def:20, hp:50, regen:0, desc:"Forged in the Dark Sanctum's embers."},
+  {name:"Throneguard Mantle",icon:"👑", price:220, def:28, hp:70, regen:6, desc:"Worn by whoever sits the Hollow Throne."},
+];
+function armorBonus(){
+  let def=0,hp=0,regen=0;
+  ARMORS.forEach(a=>{ if(ownedArmor.has(a.name)){ def+=a.def; hp+=a.hp; regen+=a.regen; } });
+  return {def,hp,regen};
+}
+
 /* ================= BATTLE ================= */
 const ARENA = {left:60,right:940,ground:520};
+const BATTLE_CX = (ARENA.left+ARENA.right)/2;
 const ENEMY_TYPES = {
-  dummy:   {name:"Training Dummy", hp:40, dmg:4, def:0, aggro:0.5, pool:["hit"], color:"#c9cfe6", reward:15},
-  brawler: {name:"Bridge Brawler", hp:65, dmg:7, def:2, aggro:0.8, pool:["hit","kick"], color:"#e0a24c", reward:25},
-  thug:    {name:"Alley Thug",     hp:80, dmg:8, def:3, aggro:0.9, pool:["hit","kick","corner"], color:"#e05c5c", reward:35},
-  stalker: {name:"Hollow Stalker", hp:95, dmg:9, def:4, aggro:1.0, pool:["incise","penetrate","hit"], color:"#5ce0a0", reward:45},
-  wretch:  {name:"Frenzied Wretch",hp:110,dmg:9, def:3, aggro:1.3, pool:["hit","kick","manic"], color:"#e05ce0", reward:55},
-  wraith:  {name:"Dissent Wraith", hp:160,dmg:12,def:6, aggro:1.1, pool:["penetrate","corner","dark","incise"], color:"#8a4bff", reward:80},
+  dummy:     {name:"Training Dummy", hp:40,  dmg:4,  def:0, aggro:0.5, pool:["hit"], reward:15},
+  brawler:   {name:"Bridge Brawler", hp:65,  dmg:7,  def:2, aggro:0.8, pool:["hit","kick"], reward:25},
+  thug:      {name:"Alley Thug",     hp:80,  dmg:8,  def:3, aggro:0.9, pool:["hit","kick","corner"], reward:35},
+  stalker:   {name:"Hollow Stalker", hp:95,  dmg:9,  def:4, aggro:1.0, pool:["incise","penetrate","hit"], reward:45},
+  wretch:    {name:"Frenzied Wretch",hp:110, dmg:9,  def:3, aggro:1.3, pool:["hit","kick","manic"], reward:55},
+  wraith:    {name:"Dissent Wraith", hp:160, dmg:12, def:6, aggro:1.1, pool:["penetrate","corner","dark","incise"], reward:80},
+  sentinel:  {name:"Iron Sentinel",  hp:190, dmg:11, def:9, aggro:0.9, pool:["hit","kick","corner","cornerstone"], reward:95},
+  revenant:  {name:"Ashen Revenant", hp:210, dmg:12, def:7, aggro:1.2, pool:["incise","penetrate","manic"], reward:110},
+  wisp:      {name:"Glass Wisp",     hp:150, dmg:10, def:4, aggro:1.6, pool:["feint","penetrate","corner"], reward:120},
+  dissenter: {name:"The Dissenter",  hp:280, dmg:14, def:8, aggro:1.2, pool:["dark","reap","manic","corner","penetrate"], reward:200},
 };
 
 let state = { mode:"menu" };
 let player, enemy, lastTime=0;
 
 function newFighter(isPlayer, kind){
+  const ab = isPlayer ? armorBonus() : {def:0,hp:0,regen:0};
+  const maxHp = isPlayer ? 100+ab.hp : ENEMY_TYPES[kind].hp;
   return {
     isPlayer, kind,
     x: isPlayer? 220: 780,
     vx:0,
     dir: isPlayer? 1:-1,
-    hp: isPlayer? 100: ENEMY_TYPES[kind].hp,
-    maxHp: isPlayer? 100: ENEMY_TYPES[kind].hp,
+    hp: maxHp,
+    maxHp: maxHp,
     energy: isPlayer? 100:999,
     maxEnergy: 100,
-    def: isPlayer? 0: ENEMY_TYPES[kind].def,
+    regenBonus: isPlayer? ab.regen : 0,
+    def: isPlayer? ab.def : ENEMY_TYPES[kind].def,
     statuses: {},
     cooldowns: {},
     pose:"idle", poseTimer:0, animT:0,
@@ -581,6 +475,7 @@ function startBattle(loc){
   mapHint.classList.add("hidden");
   mapTopBar.classList.add("hidden");
   buildAbilityBar();
+  buildBattleScene(loc.enemy);
   showToast(`${ENEMY_TYPES[loc.enemy].name} blocks your path!`);
 }
 
@@ -668,7 +563,8 @@ function useAbility(a){
 function enemyUseAbility(name){
   const table = {
     hit:ABILITIES[0], kick:ABILITIES[1], incise:ABILITIES[2], penetrate:ABILITIES[3],
-    corner:ABILITIES[4], cornerstone:ABILITIES[5], manic:ABILITIES[6], dark:ABILITIES[7]
+    corner:ABILITIES[4], cornerstone:ABILITIES[5], manic:ABILITIES[6], dark:ABILITIES[7],
+    feint:ABILITIES[8], reap:ABILITIES[9]
   };
   const a = table[name]; if(!a) return;
   if(enemy.actionLock>0) return;
@@ -709,7 +605,7 @@ function updateFighter(f,dt){
   if(f.poseTimer>0){ f.poseTimer-=dt; if(f.poseTimer<=0 && f.hp>0) f.pose = hasStatus(f,"stun")?"stun":"idle"; }
   if(f.hp<=0) f.pose="ko";
   if(f.cooldowns) for(const k in f.cooldowns){ f.cooldowns[k]=Math.max(0,f.cooldowns[k]-dt); }
-  f.energy = Math.min(f.maxEnergy, f.energy + (f.isPlayer?10:0)*dt);
+  f.energy = Math.min(f.maxEnergy, f.energy + (f.isPlayer?(10+(f.regenBonus||0)):0)*dt);
   updateStatuses(f,dt);
 }
 
@@ -775,51 +671,6 @@ function onBattleEnd(playerWon){
   resultScreen.classList.remove("hidden");
 }
 
-/* ---------- battle render ---------- */
-function drawBattle(){
-  ctx.clearRect(0,0,W,H);
-  const bg = ctx.createLinearGradient(0,0,0,H);
-  const theme = themeFor(activeLocation.enemy);
-  bg.addColorStop(0,theme[0]); bg.addColorStop(1,theme[1]);
-  ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
-
-  ctx.fillStyle="#00000055";
-  ctx.fillRect(0,ARENA.ground+40,W,H-ARENA.ground-40);
-  ctx.strokeStyle="#ffffff22"; ctx.lineWidth=2;
-  ctx.beginPath(); ctx.moveTo(0,ARENA.ground+40); ctx.lineTo(W,ARENA.ground+40); ctx.stroke();
-
-  // wall markers
-  [ARENA.left,ARENA.right].forEach(wx=>{
-    ctx.fillStyle="#ffffff14";
-    ctx.fillRect(wx-6,ARENA.ground-140,12,180);
-  });
-
-  drawStick(ctx, player.x, ARENA.ground, player.dir, {t:player.animT, color:"#7bd7ff", pose:player.pose, walking:false, accent:"#ffd166"});
-  drawStick(ctx, enemy.x, ARENA.ground, enemy.dir, {t:enemy.animT, color:theme[2], pose:enemy.pose, walking:false, accent:"#ff5c7a"});
-
-  if(hasStatus(player,"shield")){
-    ctx.save(); ctx.strokeStyle="#3fb6ffaa"; ctx.lineWidth=2;
-    ctx.beginPath(); ctx.arc(player.x, ARENA.ground-40, 42,0,Math.PI*2); ctx.stroke(); ctx.restore();
-  }
-  if(hasStatus(enemy,"cornered")){
-    ctx.fillStyle="#ff5c7a"; ctx.font="12px sans-serif"; ctx.textAlign="center";
-    ctx.fillText("CORNERED", enemy.x, ARENA.ground-90);
-  }
-  renderHud();
-}
-
-function themeFor(kind){
-  switch(kind){
-    case "dummy": return ["#1c2338","#0a0c14","#c9cfe6"];
-    case "brawler": return ["#2a2010","#0d0a05","#e0a24c"];
-    case "thug": return ["#2a1414","#0d0505","#e05c5c"];
-    case "stalker": return ["#0f2a1c","#050d09","#5ce0a0"];
-    case "wretch": return ["#2a1030","#0d050f","#e05ce0"];
-    case "wraith": return ["#150a2a","#05030d","#8a4bff"];
-    default: return ["#1c2338","#0a0c14","#e8ecf7"];
-  }
-}
-
 function renderHud(){
   const lowP = player.hp/player.maxHp < 0.3;
   hud.innerHTML = `
@@ -858,14 +709,6 @@ function renderHud(){
   });
 }
 
-function spawnFloat(f,text,color){
-  const el=document.createElement("div");
-  el.className="float"; el.textContent=text; el.style.color=color||"#fff";
-  const px = (f.x/W)*100, py=((ARENA.ground-70)/H)*100;
-  el.style.left = px+"%"; el.style.top = py+"%";
-  floaters.appendChild(el);
-  setTimeout(()=>el.remove(),1000);
-}
 function screenFlash(color){
   const el=document.createElement("div");
   el.style.position="absolute"; el.style.inset="0"; el.style.background=color;
@@ -881,22 +724,379 @@ function showToast(msg,dur){
   toastTimer=setTimeout(()=>toastEl.classList.remove("show"), dur||1800);
 }
 
+/* ================= 3D RENDERING ================= */
+const LEG_LEN=22, TORSO_LEN=28, SHOULDER_FRAC=0.8, HEAD_R=7, NECK_GAP=3;
+const LIMB_R=2.6, TORSO_R=3.6, ARM_LEN=16, ARM_SPACING=3.2, LEG_SPACING=3.2;
+const HEAD_Y = TORSO_LEN + HEAD_R + NECK_GAP;
+const MAP_CX = 500, MAP_CZ = 325;
+
+function makeLimb(len, radius){
+  const geo = new THREE.CylinderGeometry(radius, radius*0.82, len, 7);
+  geo.translate(0,-len/2,0);
+  const mesh = new THREE.Mesh(geo);
+  mesh.castShadow = true;
+  const pivot = new THREE.Group();
+  pivot.add(mesh);
+  return {pivot, mesh};
+}
+
+function makeLabelSprite(text, color){
+  const canvas=document.createElement("canvas");
+  canvas.width=256; canvas.height=64;
+  const c=canvas.getContext("2d");
+  c.font="600 32px Quicksand, sans-serif";
+  c.textAlign="center"; c.textBaseline="middle";
+  c.fillStyle=color||"#e8ecf7";
+  c.fillText(text,128,34);
+  const tex=new THREE.CanvasTexture(canvas);
+  const mat=new THREE.SpriteMaterial({map:tex, transparent:true, depthWrite:false});
+  const spr=new THREE.Sprite(mat);
+  spr.scale.set(58,14.5,1);
+  spr.userData.canvas=canvas; spr.userData.ctx=c; spr.userData.tex=tex;
+  return spr;
+}
+function updateLabelSprite(spr,text,color){
+  const c=spr.userData.ctx, canvas=spr.userData.canvas;
+  c.clearRect(0,0,canvas.width,canvas.height);
+  c.font="600 32px Quicksand, sans-serif";
+  c.textAlign="center"; c.textBaseline="middle";
+  c.fillStyle=color||"#e8ecf7";
+  c.fillText(text,128,34);
+  spr.userData.tex.needsUpdate=true;
+}
+
+function createStickRig(colorHex){
+  const mat = new THREE.MeshStandardMaterial({color:colorHex, emissive:colorHex, emissiveIntensity:0.22, roughness:0.55, metalness:0.15});
+  const root = new THREE.Group();
+  const poseGroup = new THREE.Group();
+  root.add(poseGroup);
+
+  const legL = makeLimb(LEG_LEN, LIMB_R); legL.pivot.position.set(0,0,LEG_SPACING);
+  const legR = makeLimb(LEG_LEN, LIMB_R); legR.pivot.position.set(0,0,-LEG_SPACING);
+  const armL = makeLimb(ARM_LEN, LIMB_R*0.8); armL.pivot.position.set(0,TORSO_LEN*SHOULDER_FRAC,ARM_SPACING);
+  const armR = makeLimb(ARM_LEN, LIMB_R*0.8); armR.pivot.position.set(0,TORSO_LEN*SHOULDER_FRAC,-ARM_SPACING);
+
+  const torsoGeo = new THREE.CylinderGeometry(TORSO_R, TORSO_R*1.2, TORSO_LEN, 8);
+  torsoGeo.translate(0,TORSO_LEN/2,0);
+  const torso = new THREE.Mesh(torsoGeo, mat); torso.castShadow=true;
+
+  const headGeo = new THREE.SphereGeometry(HEAD_R, 14, 10);
+  const head = new THREE.Mesh(headGeo, mat); head.position.y = HEAD_Y; head.castShadow=true;
+
+  [legL.mesh,legR.mesh,armL.mesh,armR.mesh].forEach(m=>m.material=mat);
+
+  const slashGeo = new THREE.TorusGeometry(13, 0.9, 6, 16, 1.6);
+  const slashMat = new THREE.MeshBasicMaterial({color:0xff5c7a, transparent:true, opacity:0.85});
+  const slashFX = new THREE.Mesh(slashGeo, slashMat);
+  slashFX.position.set(0, TORSO_LEN*SHOULDER_FRAC, ARM_SPACING);
+  slashFX.visible=false;
+
+  const auraFX = new THREE.Group();
+  for(let i=0;i<5;i++){
+    const s = new THREE.Mesh(new THREE.SphereGeometry(1.6,6,6), new THREE.MeshBasicMaterial({color:0x8a4bff, transparent:true, opacity:0.75}));
+    auraFX.add(s);
+  }
+  auraFX.position.y = TORSO_LEN*0.55;
+  auraFX.visible=false;
+
+  poseGroup.add(legL.pivot, legR.pivot, torso, armL.pivot, armR.pivot, head, slashFX, auraFX);
+  root.add(poseGroup);
+
+  return { root, poseGroup, legL, legR, armL, armR, torso, head, slashFX, auraFX, mat };
+}
+
+function setRigColor(rig, colorHex){
+  rig.mat.color.set(colorHex);
+  rig.mat.emissive.set(colorHex);
+}
+
+function applyPose(rig, dir, opts){
+  const t=opts.t||0, pose=opts.pose||"idle", walking=opts.walking;
+  let armA1=0,armA2=0,legA1=0,legA2=0,leanX=0,leanY=0;
+  const sway=Math.sin(t*6)*0.15;
+  const walk = walking && pose==="idle";
+  if(walk){
+    legA1=Math.sin(t*10)*0.6; legA2=-Math.sin(t*10)*0.6;
+    armA1=-Math.sin(t*10)*0.4; armA2=Math.sin(t*10)*0.4;
+  } else {
+    legA1=0.08; legA2=-0.08; armA1=sway*0.5; armA2=-sway*0.5;
+  }
+  switch(pose){
+    case "windup": leanX=-4; armA1=-1.4; armA2=-0.3; break;
+    case "hit": leanX=6; armA1=1.3; armA2=-0.2; break;
+    case "kick_wind": leanX=-4; legA1=-0.9; break;
+    case "kick": leanX=8; legA1=1.4; armA1=-0.6; break;
+    case "slash_wind": armA2=-1.6; leanX=-3; break;
+    case "slash": armA2=1.5; leanX=6; break;
+    case "thrust_wind": armA1=-1.7; leanX=-8; break;
+    case "thrust": armA1=1.9; leanX=10; break;
+    case "grab": armA1=0.9; armA2=0.9; leanX=4; break;
+    case "brace": armA1=-1.1; armA2=1.1; leanX=-3; legA1=0.3; legA2=-0.3; break;
+    case "flurry": armA1=Math.sin(t*40); armA2=-Math.sin(t*40); leanX=2; break;
+    case "dark_wind": armA1=-1.4; armA2=-1.4; leanY=-4; break;
+    case "dark": armA1=1.6; armA2=1.6; leanX=8; break;
+    case "hurt": leanX=-6; leanY=2; armA1=-0.3; armA2=0.3; break;
+    case "stun": leanX=Math.sin(t*20)*3; leanY=4; armA1=0.6; armA2=-0.6; break;
+    case "block": armA1=-0.6; armA2=0.6; leanX=-6; break;
+    case "ko": break;
+  }
+
+  rig.root.rotation.y = dir>=0 ? 0 : Math.PI;
+
+  if(pose==="ko"){
+    rig.poseGroup.rotation.z = Math.PI/2;
+    rig.poseGroup.position.set(HEAD_Y*0.35, LIMB_R+1, 0);
+    rig.legL.pivot.rotation.z=0; rig.legR.pivot.rotation.z=0;
+    rig.armL.pivot.rotation.z=0.3; rig.armR.pivot.rotation.z=-0.3;
+    rig.slashFX.visible=false; rig.auraFX.visible=false;
+    return;
+  }
+  rig.poseGroup.rotation.z = 0;
+  rig.poseGroup.position.set(leanX*0.8, LEG_LEN - leanY*0.8, 0);
+  rig.legL.pivot.rotation.z = legA1;
+  rig.legR.pivot.rotation.z = legA2;
+  rig.armL.pivot.rotation.z = armA1;
+  rig.armR.pivot.rotation.z = armA2;
+
+  const slashing = pose==="slash"||pose==="slash_wind";
+  rig.slashFX.visible = slashing;
+  if(slashing){ rig.slashFX.rotation.x=Math.PI/2; rig.slashFX.rotation.y = pose==="slash"?0.3:-1.0; }
+
+  const darking = pose==="dark";
+  rig.auraFX.visible = darking;
+  if(darking){
+    rig.auraFX.children.forEach((s,i)=>{
+      const a = t*4 + i*(Math.PI*2/rig.auraFX.children.length);
+      s.position.set(Math.cos(a)*15, Math.sin(t*3+i)*4, Math.sin(a)*15);
+    });
+  }
+}
+
+/* ---------- renderer / cameras / scenes ---------- */
+let renderer, camera, sceneHost, resizeObs;
+let mapScene, battleScene, lastActiveScene=null;
+let mapPlayerRig, mapBeacons=[];
+let battleRigP, battleRigE;
+
+function themeFor(kind){
+  switch(kind){
+    case "dummy":     return {bg:0x0a0c14, floor:0x1c2338, accent:0xc9cfe6};
+    case "brawler":   return {bg:0x0d0a05, floor:0x2a2010, accent:0xe0a24c};
+    case "thug":      return {bg:0x0d0505, floor:0x2a1414, accent:0xe05c5c};
+    case "stalker":   return {bg:0x050d09, floor:0x0f2a1c, accent:0x5ce0a0};
+    case "wretch":    return {bg:0x0d050f, floor:0x2a1030, accent:0xe05ce0};
+    case "wraith":    return {bg:0x05030d, floor:0x150a2a, accent:0x8a4bff};
+    case "sentinel":  return {bg:0x090b10, floor:0x1b2430, accent:0x9fb4c9};
+    case "revenant":  return {bg:0x0c0704, floor:0x2a1710, accent:0xc97b4a};
+    case "wisp":      return {bg:0x050b0d, floor:0x10262a, accent:0xbfe8ff};
+    case "dissenter": return {bg:0x0a0409, floor:0x240a18, accent:0xff5c7a};
+    default:          return {bg:0x0a0c14, floor:0x1c2338, accent:0xe8ecf7};
+  }
+}
+
+function initRenderer(){
+  sceneHost = document.getElementById("sceneHost");
+  renderer = new THREE.WebGLRenderer({antialias:true});
+  renderer.shadowMap.enabled = true;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+  sceneHost.appendChild(renderer.domElement);
+  camera = new THREE.PerspectiveCamera(50, 1000/650, 1, 4000);
+  const resize = ()=>{
+    const w = sceneHost.clientWidth||1, h = sceneHost.clientHeight||1;
+    renderer.setSize(w,h,false);
+    camera.aspect = w/h;
+    camera.updateProjectionMatrix();
+  };
+  if(window.ResizeObserver){ resizeObs = new ResizeObserver(resize); resizeObs.observe(sceneHost); }
+  window.addEventListener("resize", resize);
+  resize();
+}
+
+function buildMapScene(){
+  mapScene = new THREE.Scene();
+  mapScene.background = new THREE.Color(0x05060a);
+  mapScene.fog = new THREE.FogExp2(0x05060a, 0.0016);
+
+  mapScene.add(new THREE.AmbientLight(0x404868, 1.3));
+  const sun = new THREE.DirectionalLight(0xbcd4ff, 0.9);
+  sun.position.set(200,420,160);
+  sun.castShadow=true;
+  sun.shadow.mapSize.set(1024,1024);
+  sun.shadow.camera.left=-700; sun.shadow.camera.right=700;
+  sun.shadow.camera.top=700; sun.shadow.camera.bottom=-700;
+  mapScene.add(sun);
+
+  const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(2200,2200),
+    new THREE.MeshStandardMaterial({color:0x121626, roughness:1})
+  );
+  ground.rotation.x=-Math.PI/2;
+  ground.receiveShadow=true;
+  mapScene.add(ground);
+
+  const grid = new THREE.GridHelper(2200,55,0x2a3350,0x1c2338);
+  grid.position.y=0.08;
+  mapScene.add(grid);
+
+  mapBeacons = LOCATIONS.map(loc=>{
+    const g = new THREE.Group();
+    g.position.set(loc.x-MAP_CX, 0, loc.y-MAP_CZ);
+    const beamMat = new THREE.MeshStandardMaterial({color:0x3a4166, emissive:0x3a4166, emissiveIntensity:0.5});
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(2,2,40,8), beamMat);
+    beam.position.y=20; beam.castShadow=true;
+    const cap = new THREE.Mesh(new THREE.IcosahedronGeometry(8,0), beamMat.clone());
+    cap.position.y=44;
+    g.add(beam, cap);
+    const label = makeLabelSprite(loc.name, "#e8ecf7");
+    label.position.set(0,60,0);
+    g.add(label);
+    mapScene.add(g);
+    return {loc, beam, cap, label, group:g};
+  });
+
+  const pathMat = new THREE.LineBasicMaterial({color:0x4a5a8a, transparent:true, opacity:0.8});
+  PATH.forEach(([a,b])=>{
+    const A=LOCATIONS[a], B=LOCATIONS[b];
+    const geo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(A.x-MAP_CX,0.6,A.y-MAP_CZ),
+      new THREE.Vector3(B.x-MAP_CX,0.6,B.y-MAP_CZ),
+    ]);
+    mapScene.add(new THREE.Line(geo, pathMat.clone()));
+  });
+
+  mapPlayerRig = createStickRig(0x7bd7ff);
+  mapScene.add(mapPlayerRig.root);
+}
+
+function updateMapBeacons(dt){
+  mapBeacons.forEach(b=>{
+    const unlocked=b.loc.unlocked, defeated=b.loc.defeated;
+    const col = defeated?0x6fbf3a: unlocked?0x7bd7ff:0x3a4166;
+    b.beam.material.color.set(col); b.beam.material.emissive.set(col);
+    b.cap.material.color.set(col); b.cap.material.emissive.set(col);
+    b.cap.rotation.y += dt*0.6;
+    const near = Math.hypot(mapPlayer.x-b.loc.x, mapPlayer.y-b.loc.y) < 46;
+    const targetScale = near?1.3:1;
+    b.cap.scale.lerp(new THREE.Vector3(targetScale,targetScale,targetScale), 0.2);
+  });
+}
+
+function updateMapScene(dt){
+  updateMapLogic(dt);
+  const wx = mapPlayer.x-MAP_CX, wz = mapPlayer.y-MAP_CZ;
+  mapPlayerRig.root.position.set(wx,0,wz);
+  applyPose(mapPlayerRig, mapPlayer.dir, {t:mapPlayer.t, walking:mapPlayer.walking, pose:"idle"});
+  updateMapBeacons(dt);
+
+  const desired = new THREE.Vector3(wx, 230, wz+260);
+  camera.position.lerp(desired, 0.08);
+  camera.lookAt(wx, 10, wz);
+
+  mapHint.classList.remove("hidden");
+  lastActiveScene = mapScene;
+}
+
+function disposeScene(scene){
+  if(!scene) return;
+  scene.traverse(o=>{
+    if(o.geometry) o.geometry.dispose();
+    if(o.material){
+      if(Array.isArray(o.material)) o.material.forEach(m=>m.dispose());
+      else o.material.dispose();
+    }
+  });
+}
+
+function buildBattleScene(enemyKind){
+  disposeScene(battleScene);
+  battleScene = new THREE.Scene();
+  const theme = themeFor(enemyKind);
+  battleScene.background = new THREE.Color(theme.bg);
+  battleScene.fog = new THREE.Fog(theme.bg, 260, 900);
+
+  battleScene.add(new THREE.AmbientLight(0x404868,1.15));
+  const key = new THREE.DirectionalLight(0xffffff,1.05);
+  key.position.set(140,260,220); key.castShadow=true;
+  key.shadow.mapSize.set(1024,1024);
+  key.shadow.camera.left=-500; key.shadow.camera.right=500;
+  key.shadow.camera.top=500; key.shadow.camera.bottom=-500;
+  battleScene.add(key);
+
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(1400,520),
+    new THREE.MeshStandardMaterial({color:theme.floor, roughness:0.95})
+  );
+  floor.rotation.x=-Math.PI/2; floor.receiveShadow=true;
+  battleScene.add(floor);
+
+  [ARENA.left, ARENA.right].forEach(wx=>{
+    const wall = new THREE.Mesh(
+      new THREE.BoxGeometry(6,150,100),
+      new THREE.MeshStandardMaterial({color:0xffffff, transparent:true, opacity:0.08})
+    );
+    wall.position.set(wx-BATTLE_CX,75,0);
+    battleScene.add(wall);
+  });
+
+  battleRigP = createStickRig(0x7bd7ff);
+  battleRigE = createStickRig(theme.accent);
+  battleScene.add(battleRigP.root, battleRigE.root);
+
+  camera.position.set(0,112,430);
+  camera.lookAt(0,82,0);
+}
+
+function updateBattleScene(dt){
+  updatePlayerMove(dt);
+  enemyAI(dt);
+  updateFighter(player,dt);
+  updateFighter(enemy,dt);
+
+  battleRigP.root.position.set(player.x-BATTLE_CX,0,2);
+  applyPose(battleRigP, player.dir, {t:player.animT, pose:player.pose});
+  battleRigE.root.position.set(enemy.x-BATTLE_CX,0,-2);
+  applyPose(battleRigE, enemy.dir, {t:enemy.animT, pose:enemy.pose});
+
+  if(hasStatus(enemy,"cornered")){
+    // subtle pulsing tint while cornered
+    const pulse = 0.22+Math.sin(performance.now()*0.01)*0.1;
+    battleRigE.mat.emissiveIntensity = pulse;
+  } else {
+    battleRigE.mat.emissiveIntensity = 0.22;
+  }
+
+  renderHud();
+  lastActiveScene = battleScene;
+}
+
+function fighterHeadWorld(f){
+  const isPlayer = f===player;
+  return new THREE.Vector3(f.x-BATTLE_CX, 60, isPlayer?2:-2);
+}
+function project3D(vec3){
+  const v=vec3.clone().project(camera);
+  return { x:(v.x*0.5+0.5)*100, y:(1-(v.y*0.5+0.5))*100 };
+}
+function spawnFloat(f,text,color){
+  const el=document.createElement("div");
+  el.className="float"; el.textContent=text; el.style.color=color||"#fff";
+  const p = project3D(fighterHeadWorld(f));
+  el.style.left=p.x+"%"; el.style.top=p.y+"%";
+  floaters.appendChild(el);
+  setTimeout(()=>el.remove(),1000);
+}
+
 /* ================= MAIN LOOP ================= */
 function loop(ts){
   const dt = Math.min(0.05,(ts-lastTime)/1000||0);
   lastTime=ts;
-  if(state.mode==="map"){ updateMap(dt); drawMap(); }
-  else if(state.mode==="battle"){
-    updatePlayerMove(dt);
-    enemyAI(dt);
-    updateFighter(player,dt);
-    updateFighter(enemy,dt);
-    drawBattle();
-  }
+  if(state.mode==="map"){ updateMapScene(dt); }
+  else if(state.mode==="battle"){ updateBattleScene(dt); }
+  if(renderer && lastActiveScene){ renderer.render(lastActiveScene, camera); }
   requestAnimationFrame(loop);
 }
 
-/* ================= SHOP ================= */
+/* ================= SHOPS ================= */
 function buildShop(){
   const list = document.getElementById("shopList");
   list.innerHTML="";
@@ -929,6 +1129,40 @@ function buildShop(){
   });
 }
 
+function buildArmorShop(){
+  const list = document.getElementById("armorList");
+  list.innerHTML="";
+  ARMORS.forEach(a=>{
+    const owned = ownedArmor.has(a.name);
+    const price = a.price;
+    const affordable = shards>=price;
+    const card = document.createElement("div");
+    card.className="shopCard";
+    const statBits = [`+${a.def} DEF`, a.hp?`+${a.hp} HP`:null, a.regen?`+${a.regen} ENR/s`:null].filter(Boolean).join(" · ");
+    card.innerHTML = `
+      <div class="ic">${a.icon}</div>
+      <div class="nm">${a.name}</div>
+      <div class="ds">${a.desc}</div>
+      <div class="stats">${statBits}</div>
+      <div class="price">${owned?"":"✨ "+price}</div>
+      <button ${owned?"disabled class=\"owned\"":(!affordable?"disabled":"")}>${owned?"Owned ✓":"Buy"}</button>
+    `;
+    if(!owned){
+      card.querySelector("button").addEventListener("click", ()=>{
+        if(shards<price) return;
+        shards -= price;
+        ownedArmor.add(a.name);
+        writeSave();
+        updateCurrencyUI();
+        sfx.buy();
+        showToast(`Equipped ${a.name}!`);
+        buildArmorShop();
+      });
+    }
+    list.appendChild(card);
+  });
+}
+
 /* ================= SCREENS / FLOW ================= */
 function goToMap(){
   state={mode:"map"};
@@ -937,6 +1171,7 @@ function goToMap(){
   menuScreen.classList.add("hidden");
   finaleScreen.classList.add("hidden");
   shopScreen.classList.add("hidden");
+  armorScreen.classList.add("hidden");
   mapHint.classList.remove("hidden");
   mapTopBar.classList.remove("hidden");
   updateCurrencyUI();
@@ -954,6 +1189,7 @@ document.getElementById("resetBtn").addEventListener("click", ()=>{
   LOCATIONS.forEach(l=>{l.defeated=false;});
   shards = 0;
   ownedAbilities = new Set(STARTER_ABILITIES);
+  ownedArmor = new Set();
   refreshUnlocks();
   updateCurrencyUI();
   showToast("Progress reset.");
@@ -967,6 +1203,7 @@ document.getElementById("finaleBtn").addEventListener("click", ()=>{
   LOCATIONS.forEach(l=>{l.defeated=false;});
   shards = 0;
   ownedAbilities = new Set(STARTER_ABILITIES);
+  ownedArmor = new Set();
   refreshUnlocks();
   goToMap();
 });
@@ -982,10 +1219,32 @@ document.getElementById("shopBackBtn").addEventListener("click", ()=>{
   shopScreen.classList.add("hidden");
   goToMap();
 });
+document.getElementById("armorBtn").addEventListener("click", ()=>{
+  state={mode:"armor"};
+  mapHint.classList.add("hidden");
+  mapTopBar.classList.add("hidden");
+  buildArmorShop();
+  updateCurrencyUI();
+  armorScreen.classList.remove("hidden");
+});
+document.getElementById("armorBackBtn").addEventListener("click", ()=>{
+  armorScreen.classList.add("hidden");
+  goToMap();
+});
 
+/* ================= BOOT ================= */
+initRenderer();
+buildMapScene();
+lastActiveScene = mapScene;
 refreshUnlocks();
 applySave(loadSave());
 requestAnimationFrame(loop);
+
+if(document.fonts && document.fonts.ready){
+  document.fonts.ready.then(()=>{
+    mapBeacons.forEach(b=> updateLabelSprite(b.label, b.loc.name, "#e8ecf7"));
+  }).catch(()=>{});
+}
 
 })();
 </script>
