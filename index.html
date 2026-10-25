@@ -132,6 +132,7 @@
         <div><b>1-0</b> — use ability</div><div><b>Shift</b> — block / brace</div>
         <div><b>Space</b> — jump</div><div><b>Ctrl</b> — slide</div>
       </div>
+      <p style="font-size:12px;margin-top:2px;">In First-Person: <b>W/S</b> walk forward/back, <b>A/D</b> turn.</p>
       <button class="btn big" id="startBtn">Begin</button>
       <button class="btn" id="resetBtn">Reset Progress</button>
     </div>
@@ -339,7 +340,8 @@ const mapPlayer = {
   x:130,y:540,dir:1,walking:false,t:0,
   jumpY:0,jumpVel:0,airborne:false,
   slideT:0,slideCD:0,slideDirX:0,slideDirZ:-1,
-  facing:{x:0,z:-1}
+  facing:{x:0,z:-1},
+  yaw:0 // first-person look direction; 0 = facing -Z, turned by A/D
 };
 let activeLocation = null;
 
@@ -1097,7 +1099,6 @@ let battleScene, battleParticles;
 let battleRigP, battleRigE;
 let mapSceneFP, mapRigFP, mapBeaconsFP=[];
 let viewMode = "2d"; // "2d" | "fp"
-const camFacingFP = new THREE.Vector3(0,0,-1);
 let fpBobT = 0;
 
 function themeFor(kind){
@@ -1203,30 +1204,33 @@ function updateMapFPBeacons(dt){
   });
 }
 
+const TURN_SPEED = 2.4; // rad/s, first-person A/D turn rate
+
 function updateMapFP(dt){
   if(mapPlayer.slideCD>0) mapPlayer.slideCD -= dt;
-  let dx=0, dy=0;
-  if(keys.has("a")||keys.has("arrowleft")) dx-=1;
-  if(keys.has("d")||keys.has("arrowright")) dx+=1;
-  if(keys.has("w")||keys.has("arrowup")) dy-=1;
-  if(keys.has("s")||keys.has("arrowdown")) dy+=1;
-  const moving = dx||dy;
-  mapPlayer.walking = !!moving;
+
+  let turn=0, fwd=0;
+  if(keys.has("a")||keys.has("arrowleft")) turn -= 1;
+  if(keys.has("d")||keys.has("arrowright")) turn += 1;
+  if(keys.has("w")||keys.has("arrowup")) fwd += 1;
+  if(keys.has("s")||keys.has("arrowdown")) fwd -= 1;
+
+  mapPlayer.yaw += turn*TURN_SPEED*dt;
+  const fx = Math.sin(mapPlayer.yaw), fz = -Math.cos(mapPlayer.yaw);
+  mapPlayer.facing.x = fx; mapPlayer.facing.z = fz;
+  mapPlayer.walking = fwd!==0;
 
   let mx=0, mz=0, speed=160;
   if(mapPlayer.slideT>0){
     mapPlayer.slideT -= dt;
     mx = mapPlayer.slideDirX; mz = mapPlayer.slideDirZ;
     speed = 160*SLIDE_SPEED;
-  } else if(moving){
-    const len = Math.hypot(dx,dy)||1;
-    mx = dx/len; mz = dy/len;
+  } else if(fwd){
+    mx = fx*fwd; mz = fz*fwd;
   }
   if(mx||mz){
     mapPlayer.x += mx*speed*dt;
     mapPlayer.y += mz*speed*dt;
-    mapPlayer.dir = mx>=0?1:-1;
-    mapPlayer.facing.x = mx; mapPlayer.facing.z = mz;
     mapPlayer.x = Math.max(24,Math.min(MAP_W-24,mapPlayer.x));
     mapPlayer.y = Math.max(24,Math.min(MAP_H-24,mapPlayer.y));
   }
@@ -1242,13 +1246,11 @@ function updateMapFP(dt){
   mapRigFP.root.position.set(wx,0,wz);
   updateMapFPBeacons(dt);
 
-  camFacingFP.lerp(new THREE.Vector3(mapPlayer.facing.x,0,mapPlayer.facing.z), 0.15);
-  if(camFacingFP.lengthSq()>0.0001) camFacingFP.normalize();
   fpBobT += dt*(mapPlayer.walking?8:0);
   const bob = mapPlayer.walking ? Math.sin(fpBobT)*1.6 : 0;
   const eyeY = EYE_Y+bob+mapPlayer.jumpY;
   camera.position.set(wx, eyeY, wz);
-  camera.lookAt(wx+camFacingFP.x*20, eyeY, wz+camFacingFP.z*20);
+  camera.lookAt(wx+fx*20, eyeY, wz+fz*20);
 
   mapHint.classList.remove("hidden");
 }
@@ -1537,6 +1539,10 @@ function setViewMode(mode){
   camera.updateProjectionMatrix();
   const btn = document.getElementById("modeToggleBtn");
   btn.textContent = viewMode==="2d" ? "👁️ First-Person" : "🗺️ 2D Mode";
+  if(mode==="fp"){
+    // keep whatever direction the player was last facing, so the view doesn't snap
+    mapPlayer.yaw = Math.atan2(mapPlayer.facing.x, -mapPlayer.facing.z);
+  }
   if(state.mode==="battle" && battleRigP){ battleRigP.root.visible = (viewMode!=="fp"); }
   updateSurfaceForMode();
 }
