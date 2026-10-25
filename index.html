@@ -24,6 +24,8 @@
   #sceneHost{position:absolute;inset:0;border-radius:10px;overflow:hidden;background:#0d0f18;border:2px solid var(--line);
     box-shadow:0 10px 40px #000a;}
   #sceneHost canvas{width:100%;height:100%;display:block;}
+  #c{position:absolute;inset:0;width:100%;height:100%;display:block;background:#0d0f18;border:2px solid var(--line);
+    border-radius:10px;box-shadow:0 10px 40px #000a;}
   .overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
     text-align:center;background:#05060ac9;border-radius:10px;padding:20px;gap:14px;}
   .hidden{display:none !important;}
@@ -103,7 +105,8 @@
 <body>
 <div id="wrap">
   <div id="stage">
-    <div id="sceneHost"></div>
+    <canvas id="c" width="1000" height="650"></canvas>
+    <div id="sceneHost" class="hidden"></div>
 
     <div id="hud" class="hidden"></div>
     <div id="floaters"></div>
@@ -288,7 +291,7 @@ function refreshUnlocks(){
   PATH.forEach(([a,b])=>{ if(LOCATIONS[a].defeated) LOCATIONS[b].unlocked = true; });
 }
 
-const mapPlayer = {x:130,y:540,dir:1,walking:false,t:0,moveDirX:0,moveDirZ:-1};
+const mapPlayer = {x:130,y:540,dir:1,walking:false,t:0};
 let activeLocation = null;
 
 function tryEnterLocation(){
@@ -309,7 +312,7 @@ function nearestLocation(){
   return null;
 }
 
-function updateMapLogic(dt){
+function updateMap(dt){
   let dx=0, dy=0;
   if(keys.has("a")||keys.has("arrowleft")) dx-=1;
   if(keys.has("d")||keys.has("arrowright")) dx+=1;
@@ -319,8 +322,6 @@ function updateMapLogic(dt){
   mapPlayer.walking = !!moving;
   if(moving){
     const len = Math.hypot(dx,dy)||1;
-    mapPlayer.moveDirX = dx/len;
-    mapPlayer.moveDirZ = dy/len;
     mapPlayer.x += (dx/len)*160*dt;
     mapPlayer.y += (dy/len)*160*dt;
     mapPlayer.dir = dx>=0?1:-1;
@@ -334,6 +335,110 @@ function showLocked(loc){
   document.getElementById("lockedText").textContent =
     `${loc.name} is sealed. Clear the previous rival to open this path.`;
   lockedScreen.classList.remove("hidden");
+}
+
+/* ================= 2D MAP RENDERER ================= */
+const canvas2d = document.getElementById("c");
+const ctx2d = canvas2d.getContext("2d");
+
+function drawMap(){
+  const c=ctx2d, W=MAP_W, H=MAP_H;
+  c.clearRect(0,0,W,H);
+  const g = c.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,"#141a2c"); g.addColorStop(1,"#05060a");
+  c.fillStyle=g; c.fillRect(0,0,W,H);
+
+  c.strokeStyle="#232a44"; c.lineWidth=1;
+  for(let x=0;x<W;x+=40){c.beginPath();c.moveTo(x,0);c.lineTo(x,H);c.stroke();}
+  for(let y=0;y<H;y+=40){c.beginPath();c.moveTo(0,y);c.lineTo(W,y);c.stroke();}
+
+  c.lineWidth=4;
+  PATH.forEach(([a,b])=>{
+    const A=LOCATIONS[a], B=LOCATIONS[b];
+    c.strokeStyle = B.unlocked ? "#4a5a8a" : "#232a44";
+    c.setLineDash(B.unlocked?[]:[6,8]);
+    c.beginPath(); c.moveTo(A.x,A.y); c.lineTo(B.x,B.y); c.stroke();
+  });
+  c.setLineDash([]);
+
+  LOCATIONS.forEach(l=>{
+    c.save();
+    c.translate(l.x,l.y);
+    const near = Math.hypot(mapPlayer.x-l.x,mapPlayer.y-l.y) < 46;
+    c.beginPath(); c.arc(0,0,near?24:20,0,Math.PI*2);
+    c.fillStyle = l.defeated ? "#243318" : (l.unlocked? "#1c2338":"#161a28");
+    c.fill();
+    c.lineWidth=2;
+    c.strokeStyle = l.defeated? "#6fbf3a" : (l.unlocked? "#7bd7ff":"#3a4166");
+    c.stroke();
+    if(!l.unlocked){
+      c.fillStyle="#5b6690"; c.font="16px sans-serif"; c.textAlign="center";
+      c.fillText("🔒",0,6);
+    } else if(l.defeated){
+      c.fillStyle="#8bd93f"; c.font="16px sans-serif"; c.textAlign="center";
+      c.fillText("✓",0,6);
+    }
+    c.restore();
+    c.fillStyle = l.unlocked? "#e8ecf7":"#4b5372";
+    c.font="13px sans-serif"; c.textAlign="center";
+    c.fillText(l.name, l.x, l.y-32);
+  });
+
+  drawStick2D(c, mapPlayer.x, mapPlayer.y, mapPlayer.dir, {
+    walking: mapPlayer.walking, t: mapPlayer.t, color:"#7bd7ff", pose:"idle"
+  });
+
+  mapHint.classList.remove("hidden");
+}
+
+// Procedural 2D stick figure for the map screen. pose drives limb angles; t is time for idle sway.
+function drawStick2D(c,x,y,dir,opts){
+  opts = opts||{};
+  const t = opts.t||0;
+  const color = opts.color||"#e8ecf7";
+  const scale = opts.scale||1;
+  const pose = opts.pose||"idle";
+  const walk = opts.walking && pose==="idle";
+
+  c.save();
+  c.translate(x,y);
+  c.scale(dir*scale, scale);
+  c.lineCap="round"; c.lineJoin="round";
+  c.strokeStyle = color; c.lineWidth = 4.5;
+
+  const headR = 9;
+  let bodyLen = 26, hipY = bodyLen;
+  let armA1=0, armA2=0, legA1=0, legA2=0;
+
+  const sway = Math.sin(t*6)*0.15;
+  if(walk){
+    legA1 = Math.sin(t*10)*0.6; legA2 = -Math.sin(t*10)*0.6;
+    armA1 = -Math.sin(t*10)*0.4; armA2 = Math.sin(t*10)*0.4;
+  } else {
+    legA1 = 0.08; legA2 = -0.08; armA1 = sway*0.5; armA2 = -sway*0.5;
+  }
+
+  // head
+  c.beginPath(); c.arc(0,-hipY-headR*2,headR,0,Math.PI*2); c.stroke();
+  // spine
+  c.beginPath(); c.moveTo(0,-hipY); c.lineTo(0,-hipY*0.15); c.stroke();
+  const shoulderY = -hipY*0.75;
+  // arms
+  c.beginPath();
+  c.moveTo(0,shoulderY);
+  c.lineTo(Math.cos(armA1+1.3)*20, shoulderY+Math.sin(armA1+1.3)*20);
+  c.moveTo(0,shoulderY);
+  c.lineTo(Math.cos(armA2+1.9)*20, shoulderY+Math.sin(armA2+1.9)*20);
+  c.stroke();
+  // legs
+  c.beginPath();
+  c.moveTo(0,-hipY*0.15);
+  c.lineTo(Math.sin(legA1)*16, -hipY*0.15+22+Math.cos(legA1)*4);
+  c.moveTo(0,-hipY*0.15);
+  c.lineTo(Math.sin(legA2)*16, -hipY*0.15+22+Math.cos(legA2)*4);
+  c.stroke();
+
+  c.restore();
 }
 
 /* ================= ABILITIES ================= */
@@ -478,6 +583,8 @@ function startBattle(loc){
   mapTopBar.classList.add("hidden");
   buildAbilityBar();
   buildBattleScene(loc.enemy);
+  canvas2d.classList.add("hidden");
+  sceneHost.classList.remove("hidden");
   showToast(`${ENEMY_TYPES[loc.enemy].name} blocks your path!`);
 }
 
@@ -727,10 +834,9 @@ function showToast(msg,dur){
 }
 
 /* ================= 3D RENDERING ================= */
-const LEG_LEN=22, TORSO_LEN=28, SHOULDER_FRAC=0.8, HEAD_R=7, NECK_GAP=3, EYE_Y=58;
+const LEG_LEN=22, TORSO_LEN=28, SHOULDER_FRAC=0.8, HEAD_R=7, NECK_GAP=3;
 const LIMB_R=2.6, TORSO_R=3.6, ARM_LEN=16, ARM_SPACING=3.2, LEG_SPACING=3.2;
 const HEAD_Y = TORSO_LEN + HEAD_R + NECK_GAP;
-const MAP_CX = 500, MAP_CZ = 325;
 
 function makeLimb(len, radius){
   const geo = new THREE.CylinderGeometry(radius, radius*0.82, len, 7);
@@ -740,31 +846,6 @@ function makeLimb(len, radius){
   const pivot = new THREE.Group();
   pivot.add(mesh);
   return {pivot, mesh};
-}
-
-function makeLabelSprite(text, color){
-  const canvas=document.createElement("canvas");
-  canvas.width=256; canvas.height=64;
-  const c=canvas.getContext("2d");
-  c.font="600 32px Quicksand, sans-serif";
-  c.textAlign="center"; c.textBaseline="middle";
-  c.fillStyle=color||"#e8ecf7";
-  c.fillText(text,128,34);
-  const tex=new THREE.CanvasTexture(canvas);
-  const mat=new THREE.SpriteMaterial({map:tex, transparent:true, depthWrite:false});
-  const spr=new THREE.Sprite(mat);
-  spr.scale.set(58,14.5,1);
-  spr.userData.canvas=canvas; spr.userData.ctx=c; spr.userData.tex=tex;
-  return spr;
-}
-function updateLabelSprite(spr,text,color){
-  const c=spr.userData.ctx, canvas=spr.userData.canvas;
-  c.clearRect(0,0,canvas.width,canvas.height);
-  c.font="600 32px Quicksand, sans-serif";
-  c.textAlign="center"; c.textBaseline="middle";
-  c.fillStyle=color||"#e8ecf7";
-  c.fillText(text,128,34);
-  spr.userData.tex.needsUpdate=true;
 }
 
 function createStickRig(colorHex){
@@ -876,8 +957,7 @@ function applyPose(rig, dir, opts){
 
 /* ---------- renderer / cameras / scenes ---------- */
 let renderer, camera, sceneHost, resizeObs;
-let mapScene, battleScene, lastActiveScene=null;
-let mapPlayerRig, mapBeacons=[];
+let battleScene;
 let battleRigP, battleRigE;
 
 function themeFor(kind){
@@ -902,7 +982,7 @@ function initRenderer(){
   renderer.shadowMap.enabled = true;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
   sceneHost.appendChild(renderer.domElement);
-  camera = new THREE.PerspectiveCamera(74, 1000/650, 0.5, 4000);
+  camera = new THREE.PerspectiveCamera(50, 1000/650, 1, 4000);
   const resize = ()=>{
     const w = sceneHost.clientWidth||1, h = sceneHost.clientHeight||1;
     renderer.setSize(w,h,false);
@@ -912,98 +992,6 @@ function initRenderer(){
   if(window.ResizeObserver){ resizeObs = new ResizeObserver(resize); resizeObs.observe(sceneHost); }
   window.addEventListener("resize", resize);
   resize();
-}
-
-function buildMapScene(){
-  mapScene = new THREE.Scene();
-  mapScene.background = new THREE.Color(0x05060a);
-  mapScene.fog = new THREE.FogExp2(0x05060a, 0.0016);
-
-  mapScene.add(new THREE.AmbientLight(0x404868, 1.3));
-  const sun = new THREE.DirectionalLight(0xbcd4ff, 0.9);
-  sun.position.set(200,420,160);
-  sun.castShadow=true;
-  sun.shadow.mapSize.set(1024,1024);
-  sun.shadow.camera.left=-700; sun.shadow.camera.right=700;
-  sun.shadow.camera.top=700; sun.shadow.camera.bottom=-700;
-  mapScene.add(sun);
-
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(2200,2200),
-    new THREE.MeshStandardMaterial({color:0x121626, roughness:1})
-  );
-  ground.rotation.x=-Math.PI/2;
-  ground.receiveShadow=true;
-  mapScene.add(ground);
-
-  const grid = new THREE.GridHelper(2200,55,0x2a3350,0x1c2338);
-  grid.position.y=0.08;
-  mapScene.add(grid);
-
-  mapBeacons = LOCATIONS.map(loc=>{
-    const g = new THREE.Group();
-    g.position.set(loc.x-MAP_CX, 0, loc.y-MAP_CZ);
-    const beamMat = new THREE.MeshStandardMaterial({color:0x3a4166, emissive:0x3a4166, emissiveIntensity:0.5});
-    const beam = new THREE.Mesh(new THREE.CylinderGeometry(2,2,40,8), beamMat);
-    beam.position.y=20; beam.castShadow=true;
-    const cap = new THREE.Mesh(new THREE.IcosahedronGeometry(8,0), beamMat.clone());
-    cap.position.y=44;
-    g.add(beam, cap);
-    const label = makeLabelSprite(loc.name, "#e8ecf7");
-    label.position.set(0,60,0);
-    g.add(label);
-    mapScene.add(g);
-    return {loc, beam, cap, label, group:g};
-  });
-
-  const pathMat = new THREE.LineBasicMaterial({color:0x4a5a8a, transparent:true, opacity:0.8});
-  PATH.forEach(([a,b])=>{
-    const A=LOCATIONS[a], B=LOCATIONS[b];
-    const geo = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(A.x-MAP_CX,0.6,A.y-MAP_CZ),
-      new THREE.Vector3(B.x-MAP_CX,0.6,B.y-MAP_CZ),
-    ]);
-    mapScene.add(new THREE.Line(geo, pathMat.clone()));
-  });
-
-  mapPlayerRig = createStickRig(0x7bd7ff);
-  mapPlayerRig.root.visible = false; // first-person: don't render your own body
-  mapScene.add(mapPlayerRig.root);
-}
-
-function updateMapBeacons(dt){
-  mapBeacons.forEach(b=>{
-    const unlocked=b.loc.unlocked, defeated=b.loc.defeated;
-    const col = defeated?0x6fbf3a: unlocked?0x7bd7ff:0x3a4166;
-    b.beam.material.color.set(col); b.beam.material.emissive.set(col);
-    b.cap.material.color.set(col); b.cap.material.emissive.set(col);
-    b.cap.rotation.y += dt*0.6;
-    const near = Math.hypot(mapPlayer.x-b.loc.x, mapPlayer.y-b.loc.y) < 46;
-    const targetScale = near?1.3:1;
-    b.cap.scale.lerp(new THREE.Vector3(targetScale,targetScale,targetScale), 0.2);
-  });
-}
-
-const camFacing = new THREE.Vector3(mapPlayer.moveDirX, 0, mapPlayer.moveDirZ).normalize();
-let mapBobT = 0;
-
-function updateMapScene(dt){
-  updateMapLogic(dt);
-  const wx = mapPlayer.x-MAP_CX, wz = mapPlayer.y-MAP_CZ;
-  mapPlayerRig.root.position.set(wx,0,wz);
-  applyPose(mapPlayerRig, mapPlayer.dir, {t:mapPlayer.t, walking:mapPlayer.walking, pose:"idle"});
-  updateMapBeacons(dt);
-
-  // first-person: eye-level camera that turns to face the direction you're walking
-  camFacing.lerp(new THREE.Vector3(mapPlayer.moveDirX,0,mapPlayer.moveDirZ), 0.15);
-  if(camFacing.lengthSq()>0.0001) camFacing.normalize();
-  mapBobT += dt*(mapPlayer.walking?8:0);
-  const bob = mapPlayer.walking ? Math.sin(mapBobT)*1.6 : 0;
-  camera.position.set(wx, EYE_Y+bob, wz);
-  camera.lookAt(wx+camFacing.x*20, EYE_Y+bob, wz+camFacing.z*20);
-
-  mapHint.classList.remove("hidden");
-  lastActiveScene = mapScene;
 }
 
 function disposeScene(scene){
@@ -1022,7 +1010,7 @@ function buildBattleScene(enemyKind){
   battleScene = new THREE.Scene();
   const theme = themeFor(enemyKind);
   battleScene.background = new THREE.Color(theme.bg);
-  battleScene.fog = new THREE.Fog(theme.bg, 260, 900);
+  battleScene.fog = new THREE.Fog(theme.bg, 400, 1500);
 
   battleScene.add(new THREE.AmbientLight(0x404868,1.15));
   const key = new THREE.DirectionalLight(0xffffff,1.05);
@@ -1042,16 +1030,25 @@ function buildBattleScene(enemyKind){
   [ARENA.left, ARENA.right].forEach(wx=>{
     const wall = new THREE.Mesh(
       new THREE.BoxGeometry(6,150,100),
-      new THREE.MeshStandardMaterial({color:0xffffff, transparent:true, opacity:0.08})
+      new THREE.MeshStandardMaterial({color:0xffffff, transparent:true, opacity:0.2, emissive:0x2a3350, emissiveIntensity:0.4})
     );
     wall.position.set(wx-BATTLE_CX,75,0);
     battleScene.add(wall);
+    // bright boundary line on the floor so the limits read clearly at a glance
+    const line = new THREE.Mesh(
+      new THREE.BoxGeometry(3,0.6,100),
+      new THREE.MeshBasicMaterial({color:0xff5c7a})
+    );
+    line.position.set(wx-BATTLE_CX,0.3,0);
+    battleScene.add(line);
   });
 
   battleRigP = createStickRig(0x7bd7ff);
-  battleRigP.root.visible = false; // first-person: don't render your own body
   battleRigE = createStickRig(theme.accent);
   battleScene.add(battleRigP.root, battleRigE.root);
+
+  camera.position.set(0,112,460);
+  camera.lookAt(0,82,0);
 }
 
 function updateBattleScene(dt){
@@ -1073,17 +1070,16 @@ function updateBattleScene(dt){
     battleRigE.mat.emissiveIntensity = 0.22;
   }
 
-  // first-person: camera at the player's eyes, always looking at the rival
-  const eyeX = player.x-BATTLE_CX, eyeZ = 2;
-  const bob = Math.abs(player.vx)>5 ? Math.sin(performance.now()*0.012)*1.2 : 0;
-  camera.position.set(eyeX, EYE_Y+bob, eyeZ);
-  const targetX = enemy.x-BATTLE_CX, targetZ = -2;
-  if(Math.hypot(targetX-eyeX, targetZ-eyeZ) > 0.5){
-    camera.lookAt(targetX, EYE_Y*0.9, targetZ);
-  }
+  // side-view camera that pans to the midpoint of both fighters and dollies
+  // back as they spread apart, so the whole arena (and its boundaries) stays
+  // in frame no matter where either fighter is standing
+  const midX = (player.x+enemy.x)/2 - BATTLE_CX;
+  const sep = Math.abs(player.x-enemy.x);
+  const camZ = Math.min(1050, 300 + sep*0.9);
+  camera.position.set(midX, 112, camZ);
+  camera.lookAt(midX, 82, 0);
 
   renderHud();
-  lastActiveScene = battleScene;
 }
 
 function fighterHeadWorld(f){
@@ -1108,9 +1104,8 @@ function spawnFloat(f,text,color){
 function loop(ts){
   const dt = Math.min(0.05,(ts-lastTime)/1000||0);
   lastTime=ts;
-  if(state.mode==="map"){ updateMapScene(dt); }
-  else if(state.mode==="battle"){ updateBattleScene(dt); }
-  if(renderer && lastActiveScene){ renderer.render(lastActiveScene, camera); }
+  if(state.mode==="map"){ updateMap(dt); drawMap(); }
+  else if(state.mode==="battle"){ updateBattleScene(dt); renderer.render(battleScene, camera); }
   requestAnimationFrame(loop);
 }
 
@@ -1192,6 +1187,8 @@ function goToMap(){
   armorScreen.classList.add("hidden");
   mapHint.classList.remove("hidden");
   mapTopBar.classList.remove("hidden");
+  sceneHost.classList.add("hidden");
+  canvas2d.classList.remove("hidden");
   updateCurrencyUI();
   if(LOCATIONS.every(l=>l.defeated)){
     finaleScreen.classList.remove("hidden");
@@ -1252,17 +1249,9 @@ document.getElementById("armorBackBtn").addEventListener("click", ()=>{
 
 /* ================= BOOT ================= */
 initRenderer();
-buildMapScene();
-lastActiveScene = mapScene;
 refreshUnlocks();
 applySave(loadSave());
 requestAnimationFrame(loop);
-
-if(document.fonts && document.fonts.ready){
-  document.fonts.ready.then(()=>{
-    mapBeacons.forEach(b=> updateLabelSprite(b.label, b.loc.name, "#e8ecf7"));
-  }).catch(()=>{});
-}
 
 })();
 </script>
